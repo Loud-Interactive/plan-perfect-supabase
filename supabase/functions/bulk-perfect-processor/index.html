@@ -1,0 +1,1456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PagePerfect Bulk Processor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        h2 {
+            color: #3498db;
+            margin-top: 30px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], 
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+        .progress-container {
+            margin-top: 20px;
+        }
+        .progress-bar {
+            height: 20px;
+            background-color: #ecf0f1;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background-color: #2ecc71;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .status {
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+        .logs {
+            height: 200px;
+            overflow-y: auto;
+            background: #f9f9f9;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+        .success {
+            color: #2ecc71;
+        }
+        .error {
+            color: #e74c3c;
+        }
+        .warning {
+            color: #f39c12;
+        }
+        .toggle-section {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+        .toggle-header {
+            background: #f8f9fa;
+            padding: 10px 15px;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .toggle-header:hover {
+            background: #f1f1f1;
+        }
+        .toggle-content {
+            padding: 15px;
+            display: none;
+        }
+        .toggle-content.open {
+            display: block;
+            border-top: 1px solid #ddd;
+        }
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .checkbox-wrapper input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 8px;
+            background-color: #8e44ad;
+            color: white;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-pending {
+            background-color: #f1c40f;
+            color: #fff;
+        }
+        .status-processing {
+            background-color: #3498db;
+            color: #fff;
+        }
+        .status-completed {
+            background-color: #2ecc71;
+            color: #fff;
+        }
+        .status-error {
+            background-color: #e74c3c;
+            color: #fff;
+        }
+        .tab {
+            overflow: hidden;
+            border: 1px solid #ccc;
+            background-color: #f1f1f1;
+            border-radius: 4px 4px 0 0;
+        }
+        .tab button {
+            background-color: inherit;
+            float: left;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 14px 16px;
+            transition: 0.3s;
+            color: #333;
+        }
+        .tab button:hover {
+            background-color: #ddd;
+        }
+        .tab button.active {
+            background-color: #3498db;
+            color: white;
+        }
+        .tabcontent {
+            display: none;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+        }
+        @media (max-width: 768px) {
+            .filter-input {
+                min-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>PagePerfect Bulk Processor <span class="badge">Batch API</span></h1>
+        
+        <div class="card">
+            <h2>Upload URLs</h2>
+            
+            <div class="toggle-section">
+                <div class="toggle-header" onclick="toggleSection('apiConfig')">
+                    API Configuration <span>▼</span>
+                </div>
+                <div class="toggle-content open" id="apiConfig">
+                    <div class="form-group">
+                        <label for="batchApi">Batch API Endpoint:</label>
+                        <input type="text" id="batchApi" value="https://your-project-ref.supabase.co/functions/v1/bulk-process-urls">
+                        <p>The URL to your deployed bulk-process-urls Edge Function</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="batchStatusApi">Batch Status API Endpoint:</label>
+                        <input type="text" id="batchStatusApi" value="https://your-project-ref.supabase.co/functions/v1/get-batch-status">
+                        <p>The URL to your deployed get-batch-status Edge Function</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="urlDataApi">URL Data API Endpoint:</label>
+                        <input type="text" id="urlDataApi" value="https://your-project-ref.supabase.co/functions/v1/get-url-data">
+                        <p>The URL to your deployed get-url-data Edge Function</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="retryApi">Retry Failed URLs API Endpoint:</label>
+                        <input type="text" id="retryApi" value="https://your-project-ref.supabase.co/functions/v1/retry-failed-urls">
+                        <p>The URL to your deployed retry-failed-urls Edge Function</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="toggle-section">
+                <div class="toggle-header" onclick="toggleSection('batchConfig')">
+                    Batch Configuration <span>▼</span>
+                </div>
+                <div class="toggle-content open" id="batchConfig">
+                    <div class="form-group">
+                        <label for="clientId">Client ID (Optional):</label>
+                        <input type="text" id="clientId" placeholder="Client identifier">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="projectId">Project ID (Optional):</label>
+                        <input type="text" id="projectId" placeholder="Project identifier">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="batchSize">Batch Size:</label>
+                        <input type="number" id="batchSize" value="10" min="1" max="50">
+                        <p>Number of URLs to process concurrently</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="usePremium">
+                            <label for="usePremium">Use Premium Tier</label>
+                        </div>
+                        <p>Higher quality proxies with better success rates</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="useUltraPremium">
+                            <label for="useUltraPremium">Use Ultra Premium Tier</label>
+                        </div>
+                        <p>Highest quality proxies for heavily protected sites</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="renderJs" checked>
+                            <label for="renderJs">Render JavaScript</label>
+                        </div>
+                        <p>Required for most modern websites</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="enableAnalysis">
+                            <label for="enableAnalysis">Enable Claude Analysis</label>
+                        </div>
+                        <p>Analyze HTML content with Claude to extract insights</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="timeout">Request Timeout (seconds):</label>
+                        <input type="number" id="timeout" value="60" min="10" max="300">
+                        <p>Maximum time to wait for a response</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="csvFile">Upload CSV with URLs:</label>
+                <input type="file" id="csvFile" accept=".csv">
+                <p>CSV should have a column for URLs</p>
+            </div>
+            
+            <div class="form-group">
+                <label for="columnMapping">Column Mapping:</label>
+                <div id="columnMapping">
+                    <p>Upload a CSV file to set column mappings.</p>
+                </div>
+            </div>
+            
+            <button id="startProcessing" disabled>Start Processing</button>
+        </div>
+        
+        <div class="card">
+            <h2>Processing Logs</h2>
+            <div class="logs" id="processLogs"></div>
+        </div>
+        
+        <div class="card" id="activeProcessing" style="display: none;">
+            <h2>Active Batch <span id="batchIdLabel" class="badge"></span></h2>
+            
+            <div class="progress-container">
+                <label>Overall Progress:</label>
+                <div class="progress-bar">
+                    <div class="progress-bar-fill" id="progressBar"></div>
+                </div>
+                <div class="status" id="statusMessage">
+                    Processing...
+                </div>
+            </div>
+            
+            <div class="tab">
+                <button class="tablinks active" onclick="openTab(event, 'summaryTab')">Summary</button>
+                <button class="tablinks" onclick="openTab(event, 'urlsTab')">URLs</button>
+                <button class="tablinks" onclick="openTab(event, 'actionsTab')">Actions</button>
+            </div>
+            
+            <div id="summaryTab" class="tabcontent" style="display: block;">
+                <h3>Batch Summary</h3>
+                <div id="batchSummary">
+                    <p>Loading batch summary...</p>
+                </div>
+                
+                <h3>URL Status</h3>
+                <div id="urlStatusChart" style="display: flex; margin-top: 20px;">
+                    <div style="flex: 1; padding: 10px; text-align: center; background-color: #f1c40f; color: white; margin: 0 5px;">
+                        Pending: <span id="pendingCount">0</span>
+                    </div>
+                    <div style="flex: 1; padding: 10px; text-align: center; background-color: #3498db; color: white; margin: 0 5px;">
+                        Processing: <span id="processingCount">0</span>
+                    </div>
+                    <div style="flex: 1; padding: 10px; text-align: center; background-color: #2ecc71; color: white; margin: 0 5px;">
+                        Completed: <span id="completedCount">0</span>
+                    </div>
+                    <div style="flex: 1; padding: 10px; text-align: center; background-color: #e74c3c; color: white; margin: 0 5px;">
+                        Error: <span id="errorCount">0</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="urlsTab" class="tabcontent">
+                <div class="form-group">
+                    <label for="statusFilter">Filter by Status:</label>
+                    <select id="statusFilter">
+                        <option value="all">All URLs</option>
+                        <option value="pending">Pending</option>
+                        <option value="processing">Processing</option>
+                        <option value="completed">Completed</option>
+                        <option value="error">Error</option>
+                    </select>
+                    <button id="applyFilter" style="margin-left: 10px;">Apply Filter</button>
+                </div>
+                
+                <div style="overflow-x: auto;">
+                    <table id="urlsTable">
+                        <thead>
+                            <tr>
+                                <th>URL</th>
+                                <th>Status</th>
+                                <th>Created</th>
+                                <th>Updated</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="urlsTableBody">
+                            <tr>
+                                <td colspan="5" style="text-align: center;">Loading URLs...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div style="margin-top: 20px; display: flex; justify-content: space-between;">
+                    <div>
+                        <button id="prevPage" disabled>Previous Page</button>
+                        <button id="nextPage" disabled>Next Page</button>
+                        <span id="pageInfo">Page 1</span>
+                    </div>
+                    <div>
+                        <label for="pageSize">URLs per page:</label>
+                        <select id="pageSize">
+                            <option value="10">10</option>
+                            <option value="25">25</option>
+                            <option value="50">50</option>
+                            <option value="100" selected>100</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="actionsTab" class="tabcontent">
+                <h3>Batch Actions</h3>
+                
+                <div style="margin-bottom: 20px;">
+                    <button id="refreshBatch">Refresh Batch Status</button>
+                    <button id="retryAllFailed">Retry All Failed URLs</button>
+                </div>
+                
+                <div class="toggle-section">
+                    <div class="toggle-header" onclick="toggleSection('retryOptions')">
+                        Retry Options <span>▼</span>
+                    </div>
+                    <div class="toggle-content" id="retryOptions">
+                        <div class="form-group">
+                            <div class="checkbox-wrapper">
+                                <input type="checkbox" id="retryPremium">
+                                <label for="retryPremium">Use Premium Tier</label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <div class="checkbox-wrapper">
+                                <input type="checkbox" id="retryUltraPremium">
+                                <label for="retryUltraPremium">Use Ultra Premium Tier</label>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="retryTimeout">Request Timeout (seconds):</label>
+                            <input type="number" id="retryTimeout" value="120" min="10" max="300">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group" style="margin-top: 20px;">
+                    <label for="exportFormat">Export Results:</label>
+                    <select id="exportFormat">
+                        <option value="csv">CSV</option>
+                        <option value="json">JSON</option>
+                    </select>
+                    <button id="exportResults" style="margin-left: 10px;">Export</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card" id="urlDetailCard" style="display: none;">
+            <h2>URL Details <button id="closeDetails" style="float: right;">Close</button></h2>
+            <div id="urlDetailContent">
+                <p>Loading URL details...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Elements
+        const batchApiInput = document.getElementById('batchApi');
+        const batchStatusApiInput = document.getElementById('batchStatusApi');
+        const urlDataApiInput = document.getElementById('urlDataApi');
+        const retryApiInput = document.getElementById('retryApi');
+        
+        const clientIdInput = document.getElementById('clientId');
+        const projectIdInput = document.getElementById('projectId');
+        const batchSizeInput = document.getElementById('batchSize');
+        const usePremiumCheckbox = document.getElementById('usePremium');
+        const useUltraPremiumCheckbox = document.getElementById('useUltraPremium');
+        const renderJsCheckbox = document.getElementById('renderJs');
+        const enableAnalysisCheckbox = document.getElementById('enableAnalysis');
+        const timeoutInput = document.getElementById('timeout');
+        
+        const csvFileInput = document.getElementById('csvFile');
+        const columnMappingDiv = document.getElementById('columnMapping');
+        const startButton = document.getElementById('startProcessing');
+        const processLogs = document.getElementById('processLogs');
+        
+        const activeProcessingDiv = document.getElementById('activeProcessing');
+        const batchIdLabel = document.getElementById('batchIdLabel');
+        const progressBar = document.getElementById('progressBar');
+        const statusMessage = document.getElementById('statusMessage');
+        
+        const pendingCount = document.getElementById('pendingCount');
+        const processingCount = document.getElementById('processingCount');
+        const completedCount = document.getElementById('completedCount');
+        const errorCount = document.getElementById('errorCount');
+        
+        const batchSummary = document.getElementById('batchSummary');
+        const urlsTableBody = document.getElementById('urlsTableBody');
+        
+        const statusFilter = document.getElementById('statusFilter');
+        const applyFilterButton = document.getElementById('applyFilter');
+        const prevPageButton = document.getElementById('prevPage');
+        const nextPageButton = document.getElementById('nextPage');
+        const pageInfo = document.getElementById('pageInfo');
+        const pageSizeSelect = document.getElementById('pageSize');
+        
+        const refreshBatchButton = document.getElementById('refreshBatch');
+        const retryAllFailedButton = document.getElementById('retryAllFailed');
+        const retryPremiumCheckbox = document.getElementById('retryPremium');
+        const retryUltraPremiumCheckbox = document.getElementById('retryUltraPremium');
+        const retryTimeoutInput = document.getElementById('retryTimeout');
+        const exportResultsButton = document.getElementById('exportResults');
+        const exportFormatSelect = document.getElementById('exportFormat');
+        
+        const urlDetailCard = document.getElementById('urlDetailCard');
+        const urlDetailContent = document.getElementById('urlDetailContent');
+        const closeDetailsButton = document.getElementById('closeDetails');
+        
+        // State variables
+        let urls = [];
+        let urlColumnIndex = -1;
+        let activeBatchId = '';
+        let currentPage = 1;
+        let pageSize = 100;
+        let currentFilter = 'all';
+        let batchData = null;
+        let urlsData = [];
+        let counts = {
+            pending: 0,
+            processing: 0,
+            completed: 0,
+            error: 0,
+            total: 0
+        };
+        
+        // Load saved values from localStorage
+        function loadSavedValues() {
+            const savedBatchApi = localStorage.getItem('batchApi');
+            if (savedBatchApi) {
+                batchApiInput.value = savedBatchApi;
+            }
+            
+            const savedBatchStatusApi = localStorage.getItem('batchStatusApi');
+            if (savedBatchStatusApi) {
+                batchStatusApiInput.value = savedBatchStatusApi;
+            }
+            
+            const savedUrlDataApi = localStorage.getItem('urlDataApi');
+            if (savedUrlDataApi) {
+                urlDataApiInput.value = savedUrlDataApi;
+            }
+            
+            const savedRetryApi = localStorage.getItem('retryApi');
+            if (savedRetryApi) {
+                retryApiInput.value = savedRetryApi;
+            }
+            
+            const savedClientId = localStorage.getItem('clientId');
+            if (savedClientId) {
+                clientIdInput.value = savedClientId;
+            }
+            
+            const savedProjectId = localStorage.getItem('projectId');
+            if (savedProjectId) {
+                projectIdInput.value = savedProjectId;
+            }
+            
+            const savedBatchSize = localStorage.getItem('batchSize');
+            if (savedBatchSize) {
+                batchSizeInput.value = savedBatchSize;
+            }
+            
+            const savedUsePremium = localStorage.getItem('usePremium');
+            if (savedUsePremium) {
+                usePremiumCheckbox.checked = savedUsePremium === 'true';
+            }
+            
+            const savedUseUltraPremium = localStorage.getItem('useUltraPremium');
+            if (savedUseUltraPremium) {
+                useUltraPremiumCheckbox.checked = savedUseUltraPremium === 'true';
+            }
+            
+            const savedRenderJs = localStorage.getItem('renderJs');
+            if (savedRenderJs) {
+                renderJsCheckbox.checked = savedRenderJs === 'true';
+            }
+            
+            const savedEnableAnalysis = localStorage.getItem('enableAnalysis');
+            if (savedEnableAnalysis) {
+                enableAnalysisCheckbox.checked = savedEnableAnalysis === 'true';
+            }
+            
+            const savedTimeout = localStorage.getItem('timeout');
+            if (savedTimeout) {
+                timeoutInput.value = savedTimeout;
+            }
+            
+            const savedActiveBatchId = localStorage.getItem('activeBatchId');
+            if (savedActiveBatchId) {
+                activeBatchId = savedActiveBatchId;
+                batchIdLabel.textContent = activeBatchId;
+                activeProcessingDiv.style.display = 'block';
+                refreshBatchStatus();
+            }
+        }
+        
+        // Save values to localStorage
+        function saveValues() {
+            localStorage.setItem('batchApi', batchApiInput.value);
+            localStorage.setItem('batchStatusApi', batchStatusApiInput.value);
+            localStorage.setItem('urlDataApi', urlDataApiInput.value);
+            localStorage.setItem('retryApi', retryApiInput.value);
+            
+            localStorage.setItem('clientId', clientIdInput.value);
+            localStorage.setItem('projectId', projectIdInput.value);
+            localStorage.setItem('batchSize', batchSizeInput.value);
+            localStorage.setItem('usePremium', usePremiumCheckbox.checked);
+            localStorage.setItem('useUltraPremium', useUltraPremiumCheckbox.checked);
+            localStorage.setItem('renderJs', renderJsCheckbox.checked);
+            localStorage.setItem('enableAnalysis', enableAnalysisCheckbox.checked);
+            localStorage.setItem('timeout', timeoutInput.value);
+            
+            if (activeBatchId) {
+                localStorage.setItem('activeBatchId', activeBatchId);
+            }
+        }
+        
+        // Toggle sections
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            section.classList.toggle('open');
+            
+            const header = section.previousElementSibling;
+            const icon = header.querySelector('span');
+            icon.textContent = section.classList.contains('open') ? '▲' : '▼';
+        }
+        
+        // Log message
+        function logMessage(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logItem = document.createElement('div');
+            
+            if (type === 'error') {
+                logItem.className = 'error';
+                logItem.textContent = `[${timestamp}] ERROR: ${message}`;
+            } else if (type === 'warning') {
+                logItem.className = 'warning';
+                logItem.textContent = `[${timestamp}] WARNING: ${message}`;
+            } else if (type === 'success') {
+                logItem.className = 'success';
+                logItem.textContent = `[${timestamp}] SUCCESS: ${message}`;
+            } else {
+                logItem.textContent = `[${timestamp}] ${message}`;
+            }
+            
+            processLogs.appendChild(logItem);
+            processLogs.scrollTop = processLogs.scrollHeight;
+        }
+        
+        // Handle CSV file selection
+        csvFileInput.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const csv = e.target.result;
+                    
+                    // Parse the first line to get headers
+                    const lines = csv.split(/\r\n|\n|\r/);
+                    if (lines.length === 0) {
+                        throw new Error('CSV file is empty');
+                    }
+                    
+                    // Parse the headers - handle both quoted and unquoted formats
+                    const headers = parseCSVLine(lines[0]);
+                    
+                    // Create column mapping UI
+                    createColumnMappingUI(headers);
+                    
+                    // Parse the rest of the lines to get URLs
+                    urls = [];
+                    for (let i = 1; i < lines.length; i++) {
+                        if (lines[i].trim() === '') continue;
+                        
+                        const values = parseCSVLine(lines[i]);
+                        if (values.length >= headers.length) {
+                            urls.push(values);
+                        }
+                    }
+                    
+                    logMessage(`Successfully parsed CSV with ${urls.length} URLs`);
+                    startButton.disabled = false;
+                    
+                } catch (error) {
+                    logMessage(`Error parsing CSV: ${error.message}`, 'error');
+                }
+            };
+            reader.readAsText(file);
+        });
+        
+        // Parse a CSV line handling quoted values
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    // Check if this is an escaped quote (double quote inside quotes)
+                    if (inQuotes && i + 1 < line.length && line[i + 1] === '"') {
+                        current += '"';
+                        i++; // Skip the next quote
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            
+            // Add the last value
+            result.push(current);
+            return result;
+        }
+        
+        // Create column mapping UI
+        function createColumnMappingUI(headers) {
+            columnMappingDiv.innerHTML = '';
+            
+            // URL Column Selection
+            const urlGroup = document.createElement('div');
+            urlGroup.className = 'form-group';
+            
+            const urlLabel = document.createElement('label');
+            urlLabel.setAttribute('for', 'urlColumn');
+            urlLabel.textContent = 'URL Column:';
+            
+            const urlSelect = document.createElement('select');
+            urlSelect.id = 'urlColumn';
+            urlSelect.required = true;
+            
+            // Add an option for each header
+            headers.forEach((header, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = header;
+                // Try to auto-select columns with 'url' in the name
+                if (header.toLowerCase().includes('url')) {
+                    option.selected = true;
+                    urlColumnIndex = index;
+                }
+                urlSelect.appendChild(option);
+            });
+            
+            urlSelect.addEventListener('change', function() {
+                urlColumnIndex = parseInt(this.value);
+            });
+            
+            urlGroup.appendChild(urlLabel);
+            urlGroup.appendChild(urlSelect);
+            columnMappingDiv.appendChild(urlGroup);
+            
+            // If we didn't auto-select the URL column, default to the first column
+            if (urlColumnIndex === -1 && headers.length > 0) {
+                urlSelect.value = 0;
+                urlColumnIndex = 0;
+            }
+        }
+        
+        // Start processing batch
+        startButton.addEventListener('click', async function() {
+            if (urlColumnIndex === -1) {
+                logMessage('Please select a URL column first', 'error');
+                return;
+            }
+            
+            if (urls.length === 0) {
+                logMessage('No URLs to process', 'error');
+                return;
+            }
+            
+            // Save configuration
+            saveValues();
+            
+            // Extract URLs from the selected column
+            const urlList = urls.map(row => row[urlColumnIndex].trim()).filter(url => url !== '');
+            
+            if (urlList.length === 0) {
+                logMessage('No valid URLs found in the selected column', 'error');
+                return;
+            }
+            
+            // Check for protected sites
+            const protectedSites = ['orientaltrading.com', 'wayfair.com', 'homedepot.com', 'walmart.com'];
+            const hasProtectedSites = urlList.some(url => 
+                protectedSites.some(site => url.includes(site))
+            );
+            
+            if (hasProtectedSites && !usePremiumCheckbox.checked) {
+                logMessage('WARNING: Protected sites detected. Enabling Premium tier is recommended.', 'warning');
+                if (confirm('Protected sites detected. Would you like to enable Premium tier?')) {
+                    usePremiumCheckbox.checked = true;
+                    saveValues();
+                }
+            }
+            
+            // Disable the button to prevent multiple submissions
+            startButton.disabled = true;
+            
+            // Prepare request body
+            const requestBody = {
+                urls: urlList,
+                batchSize: parseInt(batchSizeInput.value),
+                premium: usePremiumCheckbox.checked,
+                ultraPremium: useUltraPremiumCheckbox.checked,
+                render: renderJsCheckbox.checked,
+                timeout: parseInt(timeoutInput.value) * 1000,
+                enableAnalysis: enableAnalysisCheckbox.checked
+            };
+            
+            // Add optional fields if provided
+            if (clientIdInput.value) {
+                requestBody.clientId = clientIdInput.value;
+            }
+            
+            if (projectIdInput.value) {
+                requestBody.projectId = projectIdInput.value;
+            }
+            
+            try {
+                logMessage(`Starting batch processing for ${urlList.length} URLs...`);
+                
+                const response = await fetch(batchApiInput.value, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    logMessage(`Batch processing started successfully. Batch ID: ${data.batchId}`, 'success');
+                    
+                    // Set active batch ID
+                    activeBatchId = data.batchId;
+                    batchIdLabel.textContent = activeBatchId;
+                    
+                    // Save batch ID to localStorage
+                    localStorage.setItem('activeBatchId', activeBatchId);
+                    
+                    // Show active processing section
+                    activeProcessingDiv.style.display = 'block';
+                    
+                    // Start polling for batch status
+                    refreshBatchStatus();
+                    
+                    // Set up polling interval
+                    setInterval(refreshBatchStatus, 15000); // Refresh every 15 seconds
+                } else {
+                    logMessage(`Failed to start batch processing: ${data.error}`, 'error');
+                    startButton.disabled = false;
+                }
+            } catch (error) {
+                logMessage(`Error starting batch processing: ${error.message}`, 'error');
+                startButton.disabled = false;
+            }
+        });
+        
+        // Refresh batch status
+        async function refreshBatchStatus() {
+            if (!activeBatchId) return;
+            
+            try {
+                const url = new URL(batchStatusApiInput.value);
+                url.searchParams.append('batchId', activeBatchId);
+                url.searchParams.append('limit', pageSize);
+                url.searchParams.append('offset', (currentPage - 1) * pageSize);
+                
+                if (currentFilter !== 'all') {
+                    url.searchParams.append('status', currentFilter);
+                }
+                
+                const response = await fetch(url.toString());
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Update batch data
+                    batchData = data.batch;
+                    urlsData = data.urls;
+                    counts = data.counts;
+                    
+                    // Update status counts
+                    pendingCount.textContent = counts.pending || 0;
+                    processingCount.textContent = counts.processing || 0;
+                    completedCount.textContent = counts.completed || 0;
+                    errorCount.textContent = counts.error || 0;
+                    
+                    // Update progress bar
+                    const totalUrls = counts.total;
+                    const processedUrls = (counts.completed || 0) + (counts.error || 0);
+                    const percentage = totalUrls > 0 ? Math.round((processedUrls / totalUrls) * 100) : 0;
+                    
+                    progressBar.style.width = `${percentage}%`;
+                    statusMessage.textContent = `Processed: ${processedUrls} / ${totalUrls} (${percentage}%)`;
+                    
+                    // Update batch summary
+                    updateBatchSummary();
+                    
+                    // Update URLs table
+                    updateUrlsTable();
+                    
+                    // Check if batch is completed
+                    if (batchData.status === 'completed') {
+                        logMessage(`Batch processing completed. Processed ${processedUrls} URLs with ${counts.error || 0} errors.`, 'success');
+                    }
+                } else {
+                    logMessage(`Failed to fetch batch status: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                logMessage(`Error fetching batch status: ${error.message}`, 'error');
+            }
+        }
+        
+        // Update batch summary
+        function updateBatchSummary() {
+            if (!batchData) return;
+            
+            const createdDate = new Date(batchData.created_at).toLocaleString();
+            const updatedDate = new Date(batchData.updated_at).toLocaleString();
+            
+            let statusClass = '';
+            switch (batchData.status) {
+                case 'pending':
+                    statusClass = 'status-pending';
+                    break;
+                case 'processing':
+                    statusClass = 'status-processing';
+                    break;
+                case 'completed':
+                    statusClass = 'status-completed';
+                    break;
+                case 'error':
+                    statusClass = 'status-error';
+                    break;
+            }
+            
+            let html = `
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div>
+                        <p><strong>Batch ID:</strong> ${batchData.id}</p>
+                        <p><strong>Status:</strong> <span class="status-badge ${statusClass}">${batchData.status}</span></p>
+                        <p><strong>Created:</strong> ${createdDate}</p>
+                        <p><strong>Last Updated:</strong> ${updatedDate}</p>
+                    </div>
+                    <div>
+                        <p><strong>Total URLs:</strong> ${batchData.total_urls}</p>
+                        <p><strong>Processed:</strong> ${batchData.processed_urls}</p>
+                        <p><strong>Successful:</strong> ${batchData.successful_urls}</p>
+                        <p><strong>Failed:</strong> ${batchData.failed_urls}</p>
+                    </div>
+                </div>
+                
+                <h4>Configuration</h4>
+                <ul>
+                    <li><strong>Premium Tier:</strong> ${batchData.config.premium ? 'Enabled' : 'Disabled'}</li>
+                    <li><strong>Ultra Premium Tier:</strong> ${batchData.config.ultraPremium ? 'Enabled' : 'Disabled'}</li>
+                    <li><strong>JavaScript Rendering:</strong> ${batchData.config.render ? 'Enabled' : 'Disabled'}</li>
+                    <li><strong>Content Analysis:</strong> ${batchData.config.enableAnalysis ? 'Enabled' : 'Disabled'}</li>
+                    <li><strong>Timeout:</strong> ${batchData.config.timeout / 1000} seconds</li>
+                </ul>
+            `;
+            
+            if (batchData.client_id) {
+                html += `<p><strong>Client ID:</strong> ${batchData.client_id}</p>`;
+            }
+            
+            if (batchData.project_id) {
+                html += `<p><strong>Project ID:</strong> ${batchData.project_id}</p>`;
+            }
+            
+            batchSummary.innerHTML = html;
+        }
+        
+        // Update URLs table
+        function updateUrlsTable() {
+            if (!urlsData) return;
+            
+            urlsTableBody.innerHTML = '';
+            
+            if (urlsData.length === 0) {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 5;
+                cell.style.textAlign = 'center';
+                cell.textContent = 'No URLs found';
+                row.appendChild(cell);
+                urlsTableBody.appendChild(row);
+                return;
+            }
+            
+            urlsData.forEach(url => {
+                const row = document.createElement('tr');
+                
+                // URL
+                const urlCell = document.createElement('td');
+                urlCell.textContent = url.url;
+                row.appendChild(urlCell);
+                
+                // Status
+                const statusCell = document.createElement('td');
+                const statusBadge = document.createElement('span');
+                statusBadge.className = `status-badge status-${url.status}`;
+                statusBadge.textContent = url.status;
+                statusCell.appendChild(statusBadge);
+                
+                if (url.status === 'error' && url.errormessage) {
+                    const errorText = document.createElement('div');
+                    errorText.style.fontSize = '12px';
+                    errorText.style.marginTop = '5px';
+                    errorText.textContent = url.errormessage;
+                    statusCell.appendChild(errorText);
+                }
+                row.appendChild(statusCell);
+                
+                // Created
+                const createdCell = document.createElement('td');
+                createdCell.textContent = new Date(url.created_at).toLocaleString();
+                row.appendChild(createdCell);
+                
+                // Updated
+                const updatedCell = document.createElement('td');
+                updatedCell.textContent = new Date(url.updated_at).toLocaleString();
+                row.appendChild(updatedCell);
+                
+                // Actions
+                const actionsCell = document.createElement('td');
+                
+                const viewButton = document.createElement('button');
+                viewButton.textContent = 'View Details';
+                viewButton.addEventListener('click', () => viewUrlDetails(url.id));
+                actionsCell.appendChild(viewButton);
+                
+                if (url.status === 'error') {
+                    const retryButton = document.createElement('button');
+                    retryButton.textContent = 'Retry';
+                    retryButton.style.marginLeft = '5px';
+                    retryButton.addEventListener('click', () => retryUrl(url.id));
+                    actionsCell.appendChild(retryButton);
+                }
+                
+                row.appendChild(actionsCell);
+                
+                urlsTableBody.appendChild(row);
+            });
+            
+            // Update pagination info
+            updatePagination();
+        }
+        
+        // Update pagination
+        function updatePagination() {
+            if (!counts) return;
+            
+            const totalItems = currentFilter === 'all' ? counts.total : counts[currentFilter] || 0;
+            const totalPages = Math.ceil(totalItems / pageSize);
+            
+            pageInfo.textContent = `Page ${currentPage} of ${totalPages || 1}`;
+            
+            prevPageButton.disabled = currentPage <= 1;
+            nextPageButton.disabled = currentPage >= totalPages;
+        }
+        
+        // Navigate to previous page
+        prevPageButton.addEventListener('click', function() {
+            if (currentPage > 1) {
+                currentPage--;
+                refreshBatchStatus();
+            }
+        });
+        
+        // Navigate to next page
+        nextPageButton.addEventListener('click', function() {
+            currentPage++;
+            refreshBatchStatus();
+        });
+        
+        // Change page size
+        pageSizeSelect.addEventListener('change', function() {
+            pageSize = parseInt(this.value);
+            currentPage = 1;
+            refreshBatchStatus();
+        });
+        
+        // Apply status filter
+        applyFilterButton.addEventListener('click', function() {
+            currentFilter = statusFilter.value;
+            currentPage = 1;
+            refreshBatchStatus();
+        });
+        
+        // Refresh batch manually
+        refreshBatchButton.addEventListener('click', refreshBatchStatus);
+        
+        // Retry all failed URLs
+        retryAllFailedButton.addEventListener('click', async function() {
+            if (!activeBatchId) return;
+            
+            try {
+                const requestBody = {
+                    batchId: activeBatchId
+                };
+                
+                // Add retry options if changed
+                if (retryPremiumCheckbox.checked) {
+                    requestBody.premium = true;
+                }
+                
+                if (retryUltraPremiumCheckbox.checked) {
+                    requestBody.ultraPremium = true;
+                }
+                
+                if (retryTimeoutInput.value) {
+                    requestBody.timeout = parseInt(retryTimeoutInput.value) * 1000;
+                }
+                
+                logMessage('Retrying all failed URLs...');
+                
+                const response = await fetch(retryApiInput.value, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    logMessage(`Retrying ${data.retriedCount} failed URLs`, 'success');
+                    
+                    // Refresh batch status after a short delay
+                    setTimeout(refreshBatchStatus, 3000);
+                } else {
+                    logMessage(`Failed to retry URLs: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                logMessage(`Error retrying URLs: ${error.message}`, 'error');
+            }
+        });
+        
+        // Retry a specific URL
+        async function retryUrl(urlId) {
+            if (!activeBatchId) return;
+            
+            try {
+                const requestBody = {
+                    batchId: activeBatchId,
+                    urlIds: [urlId]
+                };
+                
+                // Add retry options if changed
+                if (retryPremiumCheckbox.checked) {
+                    requestBody.premium = true;
+                }
+                
+                if (retryUltraPremiumCheckbox.checked) {
+                    requestBody.ultraPremium = true;
+                }
+                
+                if (retryTimeoutInput.value) {
+                    requestBody.timeout = parseInt(retryTimeoutInput.value) * 1000;
+                }
+                
+                logMessage(`Retrying URL ID: ${urlId}...`);
+                
+                const response = await fetch(retryApiInput.value, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    logMessage(`URL retry started. ${data.message}`, 'success');
+                    
+                    // Refresh batch status after a short delay
+                    setTimeout(refreshBatchStatus, 3000);
+                } else {
+                    logMessage(`Failed to retry URL: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                logMessage(`Error retrying URL: ${error.message}`, 'error');
+            }
+        }
+        
+        // View URL details
+        async function viewUrlDetails(urlId) {
+            try {
+                urlDetailCard.style.display = 'block';
+                urlDetailContent.innerHTML = '<p>Loading URL details...</p>';
+                
+                const url = new URL(urlDataApiInput.value);
+                url.searchParams.append('id', urlId);
+                
+                const response = await fetch(url.toString());
+                const data = await response.json();
+                
+                if (data.success) {
+                    const urlData = data.urlData;
+                    const createdDate = new Date(urlData.created_at).toLocaleString();
+                    const updatedDate = new Date(urlData.updated_at).toLocaleString();
+                    
+                    let html = `
+                        <h3>URL: ${urlData.url}</h3>
+                        <p><strong>Status:</strong> <span class="status-badge status-${urlData.status}">${urlData.status}</span></p>
+                        <p><strong>Created:</strong> ${createdDate}</p>
+                        <p><strong>Updated:</strong> ${updatedDate}</p>
+                    `;
+                    
+                    if (urlData.status === 'error' && urlData.errormessage) {
+                        html += `<div style="margin: 10px 0; padding: 10px; background-color: #ffebee; border-radius: 4px;">
+                            <h4>Error</h4>
+                            <p>${urlData.errormessage}</p>
+                        </div>`;
+                    }
+                    
+                    if (urlData.html_length) {
+                        html += `<p><strong>HTML Length:</strong> ${urlData.html_length} bytes</p>`;
+                    }
+                    
+                    // Add tabs for HTML and Analysis
+                    html += `
+                        <div class="tab" style="margin-top: 20px;">
+                            <button class="tablinks active" onclick="openDetailTab(event, 'htmlTab')">HTML Content</button>
+                            <button class="tablinks" onclick="openDetailTab(event, 'analysisTab')">Analysis</button>
+                        </div>
+                        
+                        <div id="htmlTab" class="tabcontent" style="display: block; max-height: 400px; overflow: auto;">
+                            <pre style="white-space: pre-wrap;">${urlData.html ? escapeHtml(urlData.html) : 'No HTML content available'}</pre>
+                        </div>
+                        
+                        <div id="analysisTab" class="tabcontent" style="display: none;">
+                            ${urlData.analysis ? formatAnalysis(urlData.analysis) : 'No analysis available'}
+                        </div>
+                    `;
+                    
+                    urlDetailContent.innerHTML = html;
+                } else {
+                    urlDetailContent.innerHTML = `<p class="error">Error: ${data.error}</p>`;
+                }
+            } catch (error) {
+                urlDetailContent.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+            
+            // Scroll to details
+            urlDetailCard.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // Close URL details
+        closeDetailsButton.addEventListener('click', function() {
+            urlDetailCard.style.display = 'none';
+        });
+        
+        // Export results
+        exportResultsButton.addEventListener('click', async function() {
+            if (!activeBatchId) return;
+            
+            try {
+                // Get all URLs for the batch
+                const url = new URL(batchStatusApiInput.value);
+                url.searchParams.append('batchId', activeBatchId);
+                url.searchParams.append('limit', 10000); // Get all URLs
+                
+                const response = await fetch(url.toString());
+                const data = await response.json();
+                
+                if (data.success) {
+                    const allUrls = data.urls;
+                    const format = exportFormatSelect.value;
+                    
+                    if (format === 'csv') {
+                        downloadCSV(allUrls);
+                    } else {
+                        downloadJSON(allUrls);
+                    }
+                } else {
+                    logMessage(`Failed to get URLs for export: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                logMessage(`Error exporting results: ${error.message}`, 'error');
+            }
+        });
+        
+        // Download results as CSV
+        function downloadCSV(urls) {
+            let csv = 'URL,Status,Created,Updated,Error,HTML Length\n';
+            
+            urls.forEach(url => {
+                csv += `"${url.url}",${url.status},"${new Date(url.created_at).toLocaleString()}","${new Date(url.updated_at).toLocaleString()}","${url.errormessage || ''}",${url.html_length || 0}\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `batch-${activeBatchId}.csv`;
+            link.click();
+            
+            logMessage('Results exported as CSV', 'success');
+        }
+        
+        // Download results as JSON
+        function downloadJSON(urls) {
+            const json = JSON.stringify(urls, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `batch-${activeBatchId}.json`;
+            link.click();
+            
+            logMessage('Results exported as JSON', 'success');
+        }
+        
+        // Open tab in batch view
+        function openTab(evt, tabName) {
+            // Hide all tab content
+            const tabcontent = document.getElementsByClassName('tabcontent');
+            for (let i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = 'none';
+            }
+            
+            // Remove active class from all tab buttons
+            const tablinks = document.getElementsByClassName('tablinks');
+            for (let i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(' active', '');
+            }
+            
+            // Show the current tab and add active class to the button
+            document.getElementById(tabName).style.display = 'block';
+            evt.currentTarget.className += ' active';
+        }
+        
+        // Open tab in URL detail view
+        function openDetailTab(evt, tabName) {
+            // Hide all tab content
+            const detailView = document.getElementById('urlDetailContent');
+            const tabcontent = detailView.getElementsByClassName('tabcontent');
+            for (let i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = 'none';
+            }
+            
+            // Remove active class from all tab buttons
+            const tablinks = detailView.getElementsByClassName('tablinks');
+            for (let i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(' active', '');
+            }
+            
+            // Show the current tab and add active class to the button
+            document.getElementById(tabName).style.display = 'block';
+            evt.currentTarget.className += ' active';
+        }
+        
+        // Format analysis content
+        function formatAnalysis(analysis) {
+            if (typeof analysis === 'object') {
+                return `<pre>${JSON.stringify(analysis, null, 2)}</pre>`;
+            }
+            
+            // Assume it's a string (possibly with markdown)
+            return `<div>${analysis.replace(/\n/g, '<br>')}</div>`;
+        }
+        
+        // Escape HTML
+        function escapeHtml(html) {
+            return html
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+        
+        // Auto-check premium if ultra premium is checked
+        useUltraPremiumCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                usePremiumCheckbox.checked = true;
+            }
+            saveValues();
+        });
+        
+        // Auto-check premium if retry ultra premium is checked
+        retryUltraPremiumCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                retryPremiumCheckbox.checked = true;
+            }
+        });
+        
+        // Save values when inputs change
+        batchApiInput.addEventListener('change', saveValues);
+        batchStatusApiInput.addEventListener('change', saveValues);
+        urlDataApiInput.addEventListener('change', saveValues);
+        retryApiInput.addEventListener('change', saveValues);
+        clientIdInput.addEventListener('change', saveValues);
+        projectIdInput.addEventListener('change', saveValues);
+        batchSizeInput.addEventListener('change', saveValues);
+        usePremiumCheckbox.addEventListener('change', saveValues);
+        useUltraPremiumCheckbox.addEventListener('change', saveValues);
+        renderJsCheckbox.addEventListener('change', saveValues);
+        enableAnalysisCheckbox.addEventListener('change', saveValues);
+        timeoutInput.addEventListener('change', saveValues);
+        
+        // Load saved values on page load
+        loadSavedValues();
+        
+        // Initial log message
+        logMessage('PagePerfect Bulk Processor ready. Upload a CSV file to begin.');
+    </script>
+</body>
+</html>

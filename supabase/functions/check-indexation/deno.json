@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "std/": "https://deno.land/std@0.177.0/"
+  },
+  "tasks": {
+    "deploy": "supabase functions deploy check-indexation --no-verify-jwt"
+  }
+}

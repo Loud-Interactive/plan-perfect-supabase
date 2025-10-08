@@ -1,0 +1,4 @@
+{
+  "schedule": "*/10 * * * *",
+  "description": "Process GSC job queue every 10 minutes"
+}

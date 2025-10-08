@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML Processor with ScraperAPI Edge Function</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        h2 {
+            color: #3498db;
+            margin-top: 30px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], 
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
+        .progress-bar {
+            height: 20px;
+            background-color: #ecf0f1;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background-color: #2ecc71;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .status {
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+        .logs {
+            height: 200px;
+            overflow-y: auto;
+            background: #f9f9f9;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+        .success {
+            color: #2ecc71;
+        }
+        .error {
+            color: #e74c3c;
+        }
+        .warning {
+            color: #f39c12;
+        }
+        .toggle-section {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+        .toggle-header {
+            background: #f8f9fa;
+            padding: 10px 15px;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .toggle-header:hover {
+            background: #f1f1f1;
+        }
+        .toggle-content {
+            padding: 15px;
+            display: none;
+        }
+        .toggle-content.open {
+            display: block;
+            border-top: 1px solid #ddd;
+        }
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .checkbox-wrapper input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 8px;
+            background-color: #8e44ad;
+            color: white;
+        }
+        #htmlContent {
+            height: 300px;
+            width: 100%;
+            font-family: monospace;
+            white-space: pre-wrap;
+            overflow: auto;
+        }
+        @media (max-width: 768px) {
+            .filter-input {
+                min-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>HTML Processor with ScraperAPI Edge Function <span class="badge">Edge Function</span></h1>
+        
+        <div class="card">
+            <h2>Configuration</h2>
+            
+            <div class="toggle-section">
+                <div class="toggle-header" onclick="toggleSection('apiConfig')">
+                    API Configuration <span>▼</span>
+                </div>
+                <div class="toggle-content open" id="apiConfig">
+                    <div class="form-group">
+                        <label for="edgeFunctionUrl">Scraper Edge Function URL:</label>
+                        <input type="text" id="edgeFunctionUrl" value="https://your-project-ref.supabase.co/functions/v1/scraper-api-fetch">
+                        <p>The URL to your deployed scraper-api-fetch Edge Function</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="scraperApiKey">ScraperAPI Key (Optional if set in Supabase secrets):</label>
+                        <input type="text" id="scraperApiKey" placeholder="Your ScraperAPI key">
+                        <p>Get one from <a href="https://www.scraperapi.com/" target="_blank">scraperapi.com</a> or use SCRAPER_API_KEY secret</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="anthropicKey">Anthropic API Key (Optional if set in Supabase secrets):</label>
+                        <input type="text" id="anthropicKey" placeholder="Your Anthropic API key">
+                        <p>For Claude-based analysis (Optional if ANTHROPIC_API_KEY secret is set)</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="analyzeEdgeFunctionUrl">Analyze Edge Function URL (Optional):</label>
+                        <input type="text" id="analyzeEdgeFunctionUrl" value="https://your-project-ref.supabase.co/functions/v1/analyze-html-content">
+                        <p>The URL to your deployed analyze-html-content Edge Function</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="toggle-section">
+                <div class="toggle-header" onclick="toggleSection('scraperConfig')">
+                    ScraperAPI Configuration <span>▼</span>
+                </div>
+                <div class="toggle-content open" id="scraperConfig">
+                    <div class="form-group">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="usePremium">
+                            <label for="usePremium">Use Premium Tier</label>
+                        </div>
+                        <p>Higher quality proxies with better success rates</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="useUltraPremium">
+                            <label for="useUltraPremium">Use Ultra Premium Tier</label>
+                        </div>
+                        <p>Highest quality proxies for heavily protected sites</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="renderJs" checked>
+                            <label for="renderJs">Render JavaScript</label>
+                        </div>
+                        <p>Required for most modern websites</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="timeout">Request Timeout (seconds):</label>
+                        <input type="number" id="timeout" value="60" min="10" max="300">
+                        <p>Maximum time to wait for a response</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label for="urlInput">URL to Process:</label>
+                <input type="text" id="urlInput" placeholder="https://example.com">
+            </div>
+            
+            <button id="fetchButton">Fetch HTML</button>
+            <button id="clearButton">Clear</button>
+            
+            <div class="progress-container" id="progressContainer">
+                <label>Progress:</label>
+                <div class="progress-bar">
+                    <div class="progress-bar-fill" id="progressBar"></div>
+                </div>
+                <div class="status" id="statusMessage">
+                    Processing...
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>Processing Logs</h2>
+            <div class="logs" id="processLogs"></div>
+        </div>
+        
+        <div class="card">
+            <h2>HTML Content</h2>
+            <div id="htmlContent"></div>
+            <button id="analyzeButton" style="margin-top: 20px;" disabled>Analyze with Claude</button>
+            <button id="saveButton" style="margin-top: 20px; margin-left: 10px;" disabled>Save to File</button>
+        </div>
+        
+        <div class="card" id="analysisCard" style="display: none;">
+            <h2>Content Analysis</h2>
+            <div id="analysisContent"></div>
+        </div>
+    </div>
+
+    <script>
+        // Elements
+        const edgeFunctionUrlInput = document.getElementById('edgeFunctionUrl');
+        const scraperApiKeyInput = document.getElementById('scraperApiKey');
+        const anthropicKeyInput = document.getElementById('anthropicKey');
+        const analyzeEdgeFunctionUrlInput = document.getElementById('analyzeEdgeFunctionUrl');
+        const usePremiumCheckbox = document.getElementById('usePremium');
+        const useUltraPremiumCheckbox = document.getElementById('useUltraPremium');
+        const renderJsCheckbox = document.getElementById('renderJs');
+        const timeoutInput = document.getElementById('timeout');
+        const urlInput = document.getElementById('urlInput');
+        const fetchButton = document.getElementById('fetchButton');
+        const clearButton = document.getElementById('clearButton');
+        const analyzeButton = document.getElementById('analyzeButton');
+        const saveButton = document.getElementById('saveButton');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const statusMessage = document.getElementById('statusMessage');
+        const processLogs = document.getElementById('processLogs');
+        const htmlContent = document.getElementById('htmlContent');
+        const analysisCard = document.getElementById('analysisCard');
+        const analysisContent = document.getElementById('analysisContent');
+
+        // Load saved values from localStorage
+        function loadSavedValues() {
+            const savedEdgeFunctionUrl = localStorage.getItem('edgeFunctionUrl');
+            if (savedEdgeFunctionUrl) {
+                edgeFunctionUrlInput.value = savedEdgeFunctionUrl;
+            }
+            
+            const savedScraperApiKey = localStorage.getItem('scraperApiKey');
+            if (savedScraperApiKey) {
+                scraperApiKeyInput.value = savedScraperApiKey;
+            }
+            
+            const savedAnthropicKey = localStorage.getItem('anthropicKey');
+            if (savedAnthropicKey) {
+                anthropicKeyInput.value = savedAnthropicKey;
+            }
+            
+            const savedAnalyzeEdgeFunctionUrl = localStorage.getItem('analyzeEdgeFunctionUrl');
+            if (savedAnalyzeEdgeFunctionUrl) {
+                analyzeEdgeFunctionUrlInput.value = savedAnalyzeEdgeFunctionUrl;
+            }
+            
+            const savedUsePremium = localStorage.getItem('usePremium');
+            if (savedUsePremium) {
+                usePremiumCheckbox.checked = savedUsePremium === 'true';
+            }
+            
+            const savedUseUltraPremium = localStorage.getItem('useUltraPremium');
+            if (savedUseUltraPremium) {
+                useUltraPremiumCheckbox.checked = savedUseUltraPremium === 'true';
+            }
+            
+            const savedRenderJs = localStorage.getItem('renderJs');
+            if (savedRenderJs) {
+                renderJsCheckbox.checked = savedRenderJs === 'true';
+            }
+            
+            const savedTimeout = localStorage.getItem('timeout');
+            if (savedTimeout) {
+                timeoutInput.value = savedTimeout;
+            }
+        }
+        
+        // Save values to localStorage
+        function saveValues() {
+            localStorage.setItem('edgeFunctionUrl', edgeFunctionUrlInput.value);
+            localStorage.setItem('scraperApiKey', scraperApiKeyInput.value);
+            localStorage.setItem('anthropicKey', anthropicKeyInput.value);
+            localStorage.setItem('analyzeEdgeFunctionUrl', analyzeEdgeFunctionUrlInput.value);
+            localStorage.setItem('usePremium', usePremiumCheckbox.checked);
+            localStorage.setItem('useUltraPremium', useUltraPremiumCheckbox.checked);
+            localStorage.setItem('renderJs', renderJsCheckbox.checked);
+            localStorage.setItem('timeout', timeoutInput.value);
+        }
+        
+        // Toggle sections
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            section.classList.toggle('open');
+            
+            const header = section.previousElementSibling;
+            const icon = header.querySelector('span');
+            icon.textContent = section.classList.contains('open') ? '▲' : '▼';
+        }
+        
+        // Log message
+        function logMessage(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logItem = document.createElement('div');
+            
+            if (type === 'error') {
+                logItem.className = 'error';
+                logItem.textContent = `[${timestamp}] ERROR: ${message}`;
+            } else if (type === 'warning') {
+                logItem.className = 'warning';
+                logItem.textContent = `[${timestamp}] WARNING: ${message}`;
+            } else if (type === 'success') {
+                logItem.className = 'success';
+                logItem.textContent = `[${timestamp}] SUCCESS: ${message}`;
+            } else {
+                logItem.textContent = `[${timestamp}] ${message}`;
+            }
+            
+            processLogs.appendChild(logItem);
+            processLogs.scrollTop = processLogs.scrollHeight;
+        }
+        
+        // Fetch HTML using Edge Function
+        async function fetchHTML() {
+            const url = urlInput.value.trim();
+            if (!url) {
+                logMessage('Please enter a URL', 'error');
+                return;
+            }
+            
+            const edgeFunctionUrl = edgeFunctionUrlInput.value.trim();
+            if (!edgeFunctionUrl) {
+                logMessage('Please enter the Edge Function URL', 'error');
+                return;
+            }
+            
+            const scraperApiKey = scraperApiKeyInput.value.trim();
+            // ScraperAPI key is optional if set in Supabase secrets
+            if (!scraperApiKey) {
+                logMessage('No ScraperAPI key provided, will use Supabase secret if available', 'warning');
+            }
+            
+            // Save configuration
+            saveValues();
+            
+            // Update UI
+            fetchButton.disabled = true;
+            analyzeButton.disabled = true;
+            saveButton.disabled = true;
+            htmlContent.textContent = '';
+            analysisCard.style.display = 'none';
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+            statusMessage.textContent = 'Connecting to Edge Function...';
+            
+            // Check for protected sites
+            const protectedSites = ['orientaltrading.com', 'wayfair.com', 'homedepot.com', 'walmart.com'];
+            const isProtectedSite = protectedSites.some(site => url.includes(site));
+            
+            if (isProtectedSite) {
+                logMessage(`Detected protected site: ${url}. This may take longer to process.`, 'warning');
+                
+                // For orientaltrading.com, suggest ultra premium
+                if (url.includes('orientaltrading.com') && !useUltraPremiumCheckbox.checked) {
+                    logMessage('orientaltrading.com is heavily protected. Ultra Premium tier is recommended.', 'warning');
+                    
+                    // Auto-check Ultra Premium for orientaltrading.com
+                    useUltraPremiumCheckbox.checked = true;
+                    usePremiumCheckbox.checked = true;
+                    saveValues();
+                }
+            }
+            
+            // Prepare request body
+            const requestBody = {
+                url,
+                scraperApiKey,
+                premium: usePremiumCheckbox.checked,
+                ultraPremium: useUltraPremiumCheckbox.checked,
+                render: renderJsCheckbox.checked,
+                timeout: parseInt(timeoutInput.value) * 1000
+            };
+            
+            logMessage(`Fetching HTML for ${url}...`);
+            
+            try {
+                progressBar.style.width = '30%';
+                statusMessage.textContent = 'Sending request to ScraperAPI...';
+                
+                const response = await fetch(edgeFunctionUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                progressBar.style.width = '60%';
+                statusMessage.textContent = 'Processing response...';
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Unknown error');
+                }
+                
+                progressBar.style.width = '100%';
+                statusMessage.textContent = 'Completed';
+                
+                // Show HTML content
+                htmlContent.textContent = data.html;
+                
+                // Enable analyze button if Anthropic key is provided
+                if (anthropicKeyInput.value.trim() && analyzeEdgeFunctionUrlInput.value.trim()) {
+                    analyzeButton.disabled = false;
+                }
+                
+                // Enable save button
+                saveButton.disabled = false;
+                
+                logMessage(`Successfully fetched HTML (${data.html.length} bytes) in ${data.processingTimeMs}ms`, 'success');
+            } catch (error) {
+                progressBar.style.width = '100%';
+                statusMessage.textContent = 'Failed';
+                logMessage(`Error: ${error.message}`, 'error');
+                
+                // Provide helpful suggestions based on error
+                if (error.message.includes('timeout')) {
+                    logMessage('Suggestion: Try increasing the timeout value', 'warning');
+                } else if (error.message.includes('bot protection') || error.message.includes('captcha')) {
+                    logMessage('Suggestion: Enable Ultra Premium tier for better results', 'warning');
+                }
+            } finally {
+                fetchButton.disabled = false;
+            }
+        }
+        
+        // Analyze HTML with Claude (via Edge Function)
+        async function analyzeHTML() {
+            const html = htmlContent.textContent;
+            if (!html) {
+                logMessage('No HTML content to analyze', 'error');
+                return;
+            }
+            
+            const anthropicKey = anthropicKeyInput.value.trim();
+            // Anthropic key is optional if set in Supabase secrets
+            if (!anthropicKey) {
+                logMessage('No Anthropic API key provided, will use Supabase secret if available', 'warning');
+            }
+            
+            const analyzeEdgeFunctionUrl = analyzeEdgeFunctionUrlInput.value.trim();
+            if (!analyzeEdgeFunctionUrl) {
+                logMessage('Please enter the Analyze Edge Function URL', 'error');
+                return;
+            }
+            
+            const url = urlInput.value.trim();
+            
+            // Update UI
+            analyzeButton.disabled = true;
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+            statusMessage.textContent = 'Preparing analysis request...';
+            
+            logMessage('Analyzing HTML content with Claude...');
+            
+            try {
+                progressBar.style.width = '20%';
+                statusMessage.textContent = 'Sending to analyze function...';
+                
+                // Call the analyze-html-content Edge Function
+                const response = await fetch(analyzeEdgeFunctionUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        html,
+                        url,
+                        anthropicKey
+                    })
+                });
+                
+                progressBar.style.width = '70%';
+                statusMessage.textContent = 'Receiving analysis...';
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Unknown error');
+                }
+                
+                progressBar.style.width = '100%';
+                statusMessage.textContent = 'Analysis complete';
+                
+                // Display analysis
+                analysisCard.style.display = 'block';
+                analysisContent.innerHTML = formatMarkdown(data.analysis);
+                
+                logMessage(`HTML analysis completed successfully in ${data.processingTimeMs}ms`, 'success');
+                
+                // Scroll to analysis
+                analysisCard.scrollIntoView({ behavior: 'smooth' });
+            } catch (error) {
+                progressBar.style.width = '100%';
+                statusMessage.textContent = 'Analysis failed';
+                logMessage(`Analysis error: ${error.message}`, 'error');
+            } finally {
+                analyzeButton.disabled = false;
+            }
+        }
+        
+        // Save HTML to file
+        function saveToFile() {
+            const html = htmlContent.textContent;
+            if (!html) {
+                logMessage('No HTML content to save', 'error');
+                return;
+            }
+            
+            const url = urlInput.value.trim();
+            const filename = url.replace(/https?:\/\//, '').replace(/[\/\?=&]/g, '_') + '.html';
+            
+            const blob = new Blob([html], { type: 'text/html' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            link.click();
+            
+            logMessage(`Saved HTML content to ${filename}`, 'success');
+        }
+        
+        // Simple markdown formatter
+        function formatMarkdown(text) {
+            // Convert headers
+            text = text.replace(/^# (.*$)/gm, '<h1>$1</h1>');
+            text = text.replace(/^## (.*$)/gm, '<h2>$1</h2>');
+            text = text.replace(/^### (.*$)/gm, '<h3>$1</h3>');
+            text = text.replace(/^#### (.*$)/gm, '<h4>$1</h4>');
+            
+            // Convert bold
+            text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+            
+            // Convert italics
+            text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+            
+            // Convert bullet points
+            text = text.replace(/^- (.*$)/gm, '<li>$1</li>');
+            text = text.replace(/(<li>.*<\/li>)/gs, '<ul>$1</ul>');
+            
+            // Fix duplicated <ul> tags
+            text = text.replace(/<\/ul>\s*<ul>/g, '');
+            
+            // Convert line breaks
+            text = text.replace(/\n/g, '<br>');
+            
+            return text;
+        }
+        
+        // Clear all
+        function clearAll() {
+            urlInput.value = '';
+            htmlContent.textContent = '';
+            progressContainer.style.display = 'none';
+            analysisCard.style.display = 'none';
+            analyzeButton.disabled = true;
+            saveButton.disabled = true;
+            processLogs.innerHTML = '';
+        }
+        
+        // Event listeners
+        fetchButton.addEventListener('click', fetchHTML);
+        clearButton.addEventListener('click', clearAll);
+        analyzeButton.addEventListener('click', analyzeHTML);
+        saveButton.addEventListener('click', saveToFile);
+        
+        // Form input saving
+        edgeFunctionUrlInput.addEventListener('change', saveValues);
+        scraperApiKeyInput.addEventListener('change', saveValues);
+        anthropicKeyInput.addEventListener('change', saveValues);
+        analyzeEdgeFunctionUrlInput.addEventListener('change', saveValues);
+        usePremiumCheckbox.addEventListener('change', saveValues);
+        useUltraPremiumCheckbox.addEventListener('change', saveValues);
+        renderJsCheckbox.addEventListener('change', saveValues);
+        timeoutInput.addEventListener('change', saveValues);
+        
+        // Auto-check premium if ultra premium is checked
+        useUltraPremiumCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                usePremiumCheckbox.checked = true;
+            }
+            saveValues();
+        });
+        
+        // Premium tier warning for protected sites
+        urlInput.addEventListener('input', function() {
+            const url = this.value.trim();
+            const protectedSites = ['orientaltrading.com', 'wayfair.com', 'homedepot.com', 'walmart.com'];
+            const isProtectedSite = protectedSites.some(site => url.includes(site));
+            
+            if (isProtectedSite && !usePremiumCheckbox.checked) {
+                logMessage(`Detected protected site: ${url}. Premium or Ultra Premium tier is recommended.`, 'warning');
+            }
+        });
+        
+        // Initial log message
+        logMessage('HTML Processor ready. Enter a URL and click "Fetch HTML" to begin.');
+    </script>
+</body>
+</html>

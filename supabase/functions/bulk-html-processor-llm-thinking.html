@@ -1,0 +1,2585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk HTML Processor with Claude 3.7 Integration</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+        h2 {
+            color: #3498db;
+            margin-top: 30px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .card {
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], 
+        input[type="number"],
+        select,
+        textarea {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
+        .progress-bar {
+            height: 20px;
+            background-color: #ecf0f1;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background-color: #2ecc71;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+        .status {
+            font-size: 14px;
+            color: #7f8c8d;
+        }
+        #results {
+            margin-top: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px 15px;
+            text-align: left;
+        }
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        tr:hover {
+            background-color: #f1f2f3;
+        }
+        .success {
+            color: #2ecc71;
+        }
+        .error {
+            color: #e74c3c;
+        }
+        .warning {
+            color: #f39c12;
+        }
+        .logs {
+            height: 200px;
+            overflow-y: auto;
+            background: #f9f9f9;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+            white-space: pre-wrap;
+        }
+        .tab {
+            overflow: hidden;
+            border: 1px solid #ccc;
+            background-color: #f1f1f1;
+            border-radius: 4px 4px 0 0;
+        }
+        .tab button {
+            background-color: inherit;
+            float: left;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 14px 16px;
+            transition: 0.3s;
+            color: #333;
+        }
+        .tab button:hover {
+            background-color: #ddd;
+        }
+        .tab button.active {
+            background-color: #3498db;
+            color: white;
+        }
+        .tabcontent {
+            display: none;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-top: none;
+            border-radius: 0 0 4px 4px;
+        }
+        .detail-view {
+            display: none;
+            margin-top: 20px;
+            border-top: 1px solid #ddd;
+            padding-top: 20px;
+        }
+        .detail-analysis {
+            margin-top: 20px;
+        }
+        .metric-card {
+            display: inline-block;
+            width: calc(25% - 20px);
+            margin: 10px;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 1px 5px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .keyword-list {
+            display: flex;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+        .keyword-item {
+            background: #f1f9ff;
+            border-radius: 20px;
+            padding: 5px 15px;
+            margin: 5px;
+            font-size: 13px;
+        }
+        .high {
+            background-color: #d6f5d6;
+        }
+        .medium {
+            background-color: #fff8e1;
+        }
+        .low {
+            background-color: #ffebee;
+        }
+        .heading-analysis {
+            margin-top: 20px;
+        }
+        .heading-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+        }
+        .filter-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .filter-input {
+            flex: 1;
+            min-width: 200px;
+        }
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin: 15px 0;
+        }
+        .toggle-section {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            overflow: hidden;
+        }
+        .toggle-header {
+            background: #f8f9fa;
+            padding: 10px 15px;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .toggle-header:hover {
+            background: #f1f1f1;
+        }
+        .toggle-content {
+            padding: 15px;
+            display: none;
+        }
+        .toggle-content.open {
+            display: block;
+            border-top: 1px solid #ddd;
+        }
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .checkbox-wrapper input[type="checkbox"] {
+            margin-right: 10px;
+        }
+        .thinking-logs {
+            margin-top: 20px;
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            font-family: monospace;
+            white-space: pre-wrap;
+            overflow-x: auto;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 8px;
+            background-color: #8e44ad;
+            color: white;
+        }
+        @media (max-width: 768px) {
+            .metric-card {
+                width: calc(50% - 20px);
+            }
+            .filter-input {
+                min-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Bulk HTML Processor with Claude 3.7 <span class="badge">AI Powered</span></h1>
+        
+        <div class="card">
+            <h2>Configuration</h2>
+            
+            <div class="toggle-section">
+                <div class="toggle-header" onclick="toggleSection('apiConfig')">
+                    API Configuration <span>▼</span>
+                </div>
+                <div class="toggle-content" id="apiConfig">
+                    <div class="form-group">
+                        <label for="apiEndpoint">API Endpoint:</label>
+                        <input type="text" id="apiEndpoint" value="https://jsypctdhynsdqrfifvdh.supabase.co/functions/v1/process-direct-html-llm-thinking">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="toggle-section">
+                <div class="toggle-header" onclick="toggleSection('dataSource')">
+                    Data Source <span>▼</span>
+                </div>
+                <div class="toggle-content open" id="dataSource">
+                    <div class="form-group">
+                        <label for="csvFile">Upload CSV with URLs:</label>
+                        <input type="file" id="csvFile" accept=".csv">
+                        <p>CSV should have columns for URLs and optional target keywords.</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="columnMapping">Column Mapping:</label>
+                        <div id="columnMapping">
+                            <p>Upload a CSV file to set column mappings.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="toggle-section">
+                <div class="toggle-header" onclick="toggleSection('processingConfig')">
+                    Processing Configuration <span>▼</span>
+                </div>
+                <div class="toggle-content open" id="processingConfig">
+                    <div class="form-group">
+                        <label for="concurrentRequests">Concurrent Requests:</label>
+                        <input type="number" id="concurrentRequests" value="5" min="1" max="20">
+                        <p>Number of URLs to process simultaneously. Higher values may cause rate limiting.</p>
+                    </div>
+                    
+                    <h4>Content Fetching Methods</h4>
+                    <p>Select your preferred method for fetching HTML content:</p>
+                    
+                    <div style="border: 1px solid #ddd; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+                        <h5>Option 1: Direct Fetching (Default)</h5>
+                        <p>Standard browser fetch with proper user agent headers. Works for most standard sites.</p>
+                    </div>
+                    
+                    <div style="border: 1px solid #ddd; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+                        <h5>Option 2: CORS Proxy</h5>
+                        <div class="form-group">
+                            <div class="checkbox-wrapper">
+                                <input type="checkbox" id="useCorsProxy">
+                                <label for="useCorsProxy">Use CORS Proxy</label>
+                            </div>
+                            <label for="corsProxy">CORS Proxy URL:</label>
+                            <input type="text" id="corsProxy" placeholder="https://corsproxy.io/?">
+                            <p>Public options: https://corsproxy.io/?, https://api.allorigins.win/raw?url=</p>
+                        </div>
+                    </div>
+                    
+                    <div style="border: 1px solid #ddd; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+                        <h5>Option 3: ScraperAPI (Recommended for Protected Sites)</h5>
+                        <div class="form-group">
+                            <div class="checkbox-wrapper">
+                                <input type="checkbox" id="useScraperApi">
+                                <label for="useScraperApi">Use ScraperAPI</label>
+                            </div>
+                            <label for="scraperApiKey">ScraperAPI Key:</label>
+                            <input type="text" id="scraperApiKey" placeholder="Your ScraperAPI key">
+                            <p>Get one from <a href="https://www.scraperapi.com/" target="_blank">scraperapi.com</a></p>
+                            
+                            <div class="form-group">
+                                <label for="scraperApiOptions">ScraperAPI Options:</label>
+                                <select id="scraperApiOptions">
+                                    <option value="regular">Regular (Basic Protection)</option>
+                                    <option value="premium" selected>Premium (Advanced Protection)</option>
+                                    <option value="ultra">Ultra Premium (Highest Protection)</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <div class="checkbox-wrapper">
+                                    <input type="checkbox" id="scraperApiRender" checked>
+                                    <label for="scraperApiRender">Render JavaScript</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="border: 1px solid #ddd; padding: 15px; border-radius: 4px; margin-bottom: 20px;">
+                        <h5>Option 4: Local Proxy Server</h5>
+                        <div class="form-group">
+                            <div class="checkbox-wrapper">
+                                <input type="checkbox" id="useLocalProxy">
+                                <label for="useLocalProxy">Use Local Proxy</label>
+                            </div>
+                            <label for="localProxyUrl">Local Proxy URL:</label>
+                            <input type="text" id="localProxyUrl" placeholder="http://localhost:3000/fetch?url=">
+                            <p>Enter the URL of your local proxy server with the url parameter prefix</p>
+                        </div>
+                        <p><strong>Note:</strong> For highly protected sites, consider running a local proxy server with Puppeteer/Playwright.</p>
+                    </div>
+                    
+                    <h4>Fetch Options</h4>
+                    <div class="form-group">
+                        <label for="fetchTimeout">Request Timeout (seconds):</label>
+                        <input type="number" id="fetchTimeout" value="60" min="10" max="300">
+                        <p>Maximum time to wait for a response. Use higher values for slow sites or proxy services.</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="retryFailedUrls" checked>
+                            <label for="retryFailedUrls">Auto-retry failed URLs</label>
+                        </div>
+                        <label for="maxRetries">Max Retries:</label>
+                        <input type="number" id="maxRetries" value="2" min="0" max="5">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="toggle-section">
+                <div class="toggle-header" onclick="toggleSection('claudeConfig')">
+                    Claude 3.7 Configuration <span>▼</span>
+                </div>
+                <div class="toggle-content open" id="claudeConfig">
+                    <div class="form-group">
+                        <label for="modelVersion">Model Version:</label>
+                        <select id="modelVersion">
+                            <option value="claude-3-7-sonnet-20250219" selected>Claude 3.7 Sonnet</option>
+                            <option value="claude-3-opus-20240229">Claude 3 Opus</option>
+                            <option value="claude-3-sonnet-20240229">Claude 3 Sonnet</option>
+                            <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                        </select>
+                        <p>Select the Claude model version to use for analysis.</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="enableThinking" checked>
+                            <label for="enableThinking">Enable Claude Thinking</label>
+                        </div>
+                        <p>When enabled, Claude will show its reasoning process for more transparent analysis.</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="thinkingBudget">Thinking Budget (tokens):</label>
+                        <input type="number" id="thinkingBudget" value="16000" min="1000" max="64000">
+                        <p>Maximum tokens to allocate for Claude's thinking process. Higher values provide more detailed reasoning.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="toggle-section">
+                <div class="toggle-header" onclick="toggleSection('databaseConfig')">
+                    PagePerfect Database Integration <span>▼</span>
+                </div>
+                <div class="toggle-content" id="databaseConfig">
+                    <div class="form-group">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="saveToDatabase">
+                            <label for="saveToDatabase">Save analysis results to PagePerfect database</label>
+                        </div>
+                        <p>When enabled, the HTML content and analysis results will be saved to the database for use with other PagePerfect functions.</p>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="clientId">Client ID:</label>
+                        <input type="text" id="clientId" placeholder="Required for database save">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="projectId">Project ID (optional):</label>
+                        <input type="text" id="projectId" placeholder="Optional project identifier">
+                    </div>
+                </div>
+            </div>
+            
+            <button id="startProcessing" disabled>Start Processing</button>
+            <button id="stopProcessing" disabled>Stop Processing</button>
+            
+            <div class="progress-container" id="progressContainer">
+                <label>Progress:</label>
+                <div class="progress-bar">
+                    <div class="progress-bar-fill" id="progressBar"></div>
+                </div>
+                <div class="status" id="statusMessage">
+                    Processed: <span id="processedCount">0</span> / <span id="totalCount">0</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>Processing Logs</h2>
+            <div class="logs" id="processLogs"></div>
+        </div>
+        
+        <div class="card" id="results">
+            <h2>Results</h2>
+            
+            <div class="tab">
+                <button class="tablinks active" onclick="openTab(event, 'summaryTab')">Summary</button>
+                <button class="tablinks" onclick="openTab(event, 'tableTab')">Table View</button>
+                <button class="tablinks" onclick="openTab(event, 'dbResultsTab')">Database Results</button>
+                <button class="tablinks" onclick="openTab(event, 'exportTab')">Export</button>
+            </div>
+            
+            <div id="summaryTab" class="tabcontent" style="display: block;">
+                <div class="filter-container">
+                    <div class="filter-input">
+                        <label for="keywordFilter">Filter by Keyword:</label>
+                        <input type="text" id="keywordFilter" placeholder="Enter keyword">
+                    </div>
+                    <div class="filter-input">
+                        <label for="scoreFilter">Filter by Score:</label>
+                        <select id="scoreFilter">
+                            <option value="all">All</option>
+                            <option value="high">High (80-100)</option>
+                            <option value="medium">Medium (50-79)</option>
+                            <option value="low">Low (0-49)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="action-buttons">
+                    <button id="applySummaryFilters">Apply Filters</button>
+                    <button id="resetSummaryFilters">Reset Filters</button>
+                </div>
+                
+                <div id="summaryStats">
+                    <p>No data processed yet.</p>
+                </div>
+            </div>
+            
+            <div id="tableTab" class="tabcontent">
+                <div class="filter-container">
+                    <div class="filter-input">
+                        <label for="urlFilter">Filter by URL:</label>
+                        <input type="text" id="urlFilter" placeholder="Enter URL">
+                    </div>
+                    <div class="filter-input">
+                        <label for="statusFilter">Filter by Status:</label>
+                        <select id="statusFilter">
+                            <option value="all">All</option>
+                            <option value="success">Success</option>
+                            <option value="error">Error</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="action-buttons">
+                    <button id="applyTableFilters">Apply Filters</button>
+                    <button id="resetTableFilters">Reset Filters</button>
+                </div>
+                
+                <div style="overflow-x: auto;">
+                    <table id="resultsTable">
+                        <thead>
+                            <tr>
+                                <th>URL</th>
+                                <th>Keyword</th>
+                                <th>Status</th>
+                                <th>Score</th>
+                                <th>Word Count</th>
+                                <th>Keyword Density</th>
+                                <th>Database Save</th>
+                                <th>Thinking</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsBody">
+                            <tr>
+                                <td colspan="9" style="text-align: center;">No results yet</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div id="dbResultsTab" class="tabcontent">
+                <h3>Database Save Results</h3>
+                <div id="dbSaveStats">
+                    <p>No database saves performed yet.</p>
+                </div>
+                
+                <div style="overflow-x: auto;">
+                    <table id="dbResultsTable">
+                        <thead>
+                            <tr>
+                                <th>URL</th>
+                                <th>Save Status</th>
+                                <th>Record ID</th>
+                                <th>Table</th>
+                                <th>Reason (if failed)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dbResultsBody">
+                            <tr>
+                                <td colspan="5" style="text-align: center;">No database results yet</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <div id="exportTab" class="tabcontent">
+                <div class="form-group">
+                    <label for="exportOptions">Export Options:</label>
+                    <select id="exportOptions">
+                        <option value="all">All Data</option>
+                        <option value="success">Successful Results Only</option>
+                        <option value="error">Failed Results Only</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="exportFilename">Filename:</label>
+                    <input type="text" id="exportFilename" value="html-processing-results.csv">
+                </div>
+                
+                <button id="exportButton" disabled>Export to CSV</button>
+                
+                <div class="form-group" style="margin-top:20px;">
+                    <label for="exportDbResults">Include Database Results:</label>
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox" id="exportDbResults" checked>
+                        <label for="exportDbResults">Include database save information in export</label>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="exportThinking">Include Thinking Logs:</label>
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox" id="exportThinking">
+                        <label for="exportThinking">Include Claude thinking logs in export (may make CSV very large)</label>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="detail-view" id="detailView">
+                <button id="closeDetail" style="float: right;">Close Details</button>
+                <h3 id="detailTitle">URL Details</h3>
+                <p id="detailKeyword">Target keyword: <span></span></p>
+                
+                <div class="detail-analysis">
+                    <div class="metric-card">
+                        <h4>Overall Score</h4>
+                        <div id="detailScore" style="font-size: 24px; font-weight: bold;">-</div>
+                    </div>
+                    <div class="metric-card">
+                        <h4>Word Count</h4>
+                        <div id="detailWordCount">-</div>
+                    </div>
+                    <div class="metric-card">
+                        <h4>Keyword Density</h4>
+                        <div id="detailKeywordDensity">-</div>
+                    </div>
+                    <div class="metric-card">
+                        <h4>Heading Score</h4>
+                        <div id="detailHeadingScore">-</div>
+                    </div>
+                    
+                    <h4>Top Keywords</h4>
+                    <div class="keyword-list" id="detailTopKeywords"></div>
+                    
+                    <h4>Headings Analysis</h4>
+                    <div class="heading-analysis" id="detailHeadings"></div>
+                    
+                    <h4>Recommendations</h4>
+                    <ul id="detailRecommendations"></ul>
+                    
+                    <div class="toggle-section">
+                        <div class="toggle-header" onclick="toggleSection('thinkingLogs')">
+                            Claude Thinking Logs <span>▼</span>
+                        </div>
+                        <div class="toggle-content" id="thinkingLogs">
+                            <div class="thinking-logs" id="detailThinkingLogs">No thinking logs available</div>
+                        </div>
+                    </div>
+                    
+                    <div id="detailDbInfo" style="margin-top: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 4px;">
+                        <h4>Database Information</h4>
+                        <div id="detailDbContent">Not saved to database</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let urls = [];
+        let processingResults = [];
+        let processingQueue = [];
+        let isProcessing = false;
+        let shouldStop = false;
+        let csvHeaders = [];
+        let urlColumnIndex = -1;
+        let keywordColumnIndex = -1;
+        let activeWorkers = 0;
+        let detailViewCurrentUrl = null;
+        let dbSaveResults = [];
+        
+        // DOM Elements
+        const apiEndpointInput = document.getElementById('apiEndpoint');
+        const csvFileInput = document.getElementById('csvFile');
+        const columnMappingDiv = document.getElementById('columnMapping');
+        const concurrentRequestsInput = document.getElementById('concurrentRequests');
+        const startButton = document.getElementById('startProcessing');
+        const stopButton = document.getElementById('stopProcessing');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const processedCount = document.getElementById('processedCount');
+        const totalCount = document.getElementById('totalCount');
+        const statusMessage = document.getElementById('statusMessage');
+        const processLogs = document.getElementById('processLogs');
+        const resultsTable = document.getElementById('resultsTable');
+        const resultsBody = document.getElementById('resultsBody');
+        const dbResultsBody = document.getElementById('dbResultsBody');
+        const exportButton = document.getElementById('exportButton');
+        const detailView = document.getElementById('detailView');
+        const summaryStats = document.getElementById('summaryStats');
+        const dbSaveStats = document.getElementById('dbSaveStats');
+        const saveToDatabase = document.getElementById('saveToDatabase');
+        const clientIdInput = document.getElementById('clientId');
+        const projectIdInput = document.getElementById('projectId');
+        const modelVersionSelect = document.getElementById('modelVersion');
+        const enableThinkingCheckbox = document.getElementById('enableThinking');
+        const thinkingBudgetInput = document.getElementById('thinkingBudget');
+        const exportThinkingCheckbox = document.getElementById('exportThinking');
+        
+        // Fetch method elements
+        const useScraperApiCheckbox = document.getElementById('useScraperApi');
+        const scraperApiKeyInput = document.getElementById('scraperApiKey');
+        const scraperApiOptionsSelect = document.getElementById('scraperApiOptions');
+        const scraperApiRenderCheckbox = document.getElementById('scraperApiRender');
+        const useCorsProxyCheckbox = document.getElementById('useCorsProxy');
+        const corsProxyInput = document.getElementById('corsProxy');
+        const useLocalProxyCheckbox = document.getElementById('useLocalProxy');
+        const localProxyUrlInput = document.getElementById('localProxyUrl');
+        const fetchTimeoutInput = document.getElementById('fetchTimeout');
+        const retryFailedUrlsCheckbox = document.getElementById('retryFailedUrls');
+        const maxRetriesInput = document.getElementById('maxRetries');
+        
+        // Load saved values from localStorage
+        function loadSavedValues() {
+            // Load ScraperAPI settings
+            const savedScraperApiKey = localStorage.getItem('scraperApiKey');
+            if (savedScraperApiKey) {
+                scraperApiKeyInput.value = savedScraperApiKey;
+            }
+            
+            const savedUseScraperApi = localStorage.getItem('useScraperApi');
+            if (savedUseScraperApi) {
+                useScraperApiCheckbox.checked = savedUseScraperApi === 'true';
+            }
+            
+            const savedScraperApiOptions = localStorage.getItem('scraperApiOptions');
+            if (savedScraperApiOptions) {
+                scraperApiOptionsSelect.value = savedScraperApiOptions;
+            }
+            
+            const savedScraperApiRender = localStorage.getItem('scraperApiRender');
+            if (savedScraperApiRender) {
+                scraperApiRenderCheckbox.checked = savedScraperApiRender === 'true';
+            }
+            
+            // Load CORS proxy settings
+            const savedUseCorsProxy = localStorage.getItem('useCorsProxy');
+            if (savedUseCorsProxy) {
+                useCorsProxyCheckbox.checked = savedUseCorsProxy === 'true';
+            }
+            
+            const savedCorsProxy = localStorage.getItem('corsProxy');
+            if (savedCorsProxy) {
+                corsProxyInput.value = savedCorsProxy;
+            }
+            
+            // Load local proxy settings
+            const savedUseLocalProxy = localStorage.getItem('useLocalProxy');
+            if (savedUseLocalProxy) {
+                useLocalProxyCheckbox.checked = savedUseLocalProxy === 'true';
+            }
+            
+            const savedLocalProxyUrl = localStorage.getItem('localProxyUrl');
+            if (savedLocalProxyUrl) {
+                localProxyUrlInput.value = savedLocalProxyUrl;
+            }
+            
+            // Load fetch options
+            const savedFetchTimeout = localStorage.getItem('fetchTimeout');
+            if (savedFetchTimeout) {
+                fetchTimeoutInput.value = savedFetchTimeout;
+            }
+            
+            const savedRetryFailedUrls = localStorage.getItem('retryFailedUrls');
+            if (savedRetryFailedUrls) {
+                retryFailedUrlsCheckbox.checked = savedRetryFailedUrls === 'true';
+            }
+            
+            const savedMaxRetries = localStorage.getItem('maxRetries');
+            if (savedMaxRetries) {
+                maxRetriesInput.value = savedMaxRetries;
+            }
+            
+            // Load client ID
+            const savedClientId = localStorage.getItem('clientId');
+            if (savedClientId) {
+                clientIdInput.value = savedClientId;
+            }
+        }
+        
+        // Save values to localStorage
+        function saveValues() {
+            // Save ScraperAPI settings
+            localStorage.setItem('scraperApiKey', scraperApiKeyInput.value);
+            localStorage.setItem('useScraperApi', useScraperApiCheckbox.checked);
+            localStorage.setItem('scraperApiOptions', scraperApiOptionsSelect.value);
+            localStorage.setItem('scraperApiRender', scraperApiRenderCheckbox.checked);
+            
+            // Save CORS proxy settings
+            localStorage.setItem('useCorsProxy', useCorsProxyCheckbox.checked);
+            localStorage.setItem('corsProxy', corsProxyInput.value);
+            
+            // Save local proxy settings
+            localStorage.setItem('useLocalProxy', useLocalProxyCheckbox.checked);
+            localStorage.setItem('localProxyUrl', localProxyUrlInput.value);
+            
+            // Save fetch options
+            localStorage.setItem('fetchTimeout', fetchTimeoutInput.value);
+            localStorage.setItem('retryFailedUrls', retryFailedUrlsCheckbox.checked);
+            localStorage.setItem('maxRetries', maxRetriesInput.value);
+            
+            // Save client ID
+            localStorage.setItem('clientId', clientIdInput.value);
+        }
+        
+        // Event listeners for saving values
+        // Scraper API
+        scraperApiKeyInput.addEventListener('change', saveValues);
+        useScraperApiCheckbox.addEventListener('change', saveValues);
+        scraperApiOptionsSelect.addEventListener('change', saveValues);
+        scraperApiRenderCheckbox.addEventListener('change', saveValues);
+        
+        // CORS Proxy
+        useCorsProxyCheckbox.addEventListener('change', saveValues);
+        corsProxyInput.addEventListener('change', saveValues);
+        
+        // Local Proxy
+        useLocalProxyCheckbox.addEventListener('change', saveValues);
+        localProxyUrlInput.addEventListener('change', saveValues);
+        
+        // Fetch Options
+        fetchTimeoutInput.addEventListener('change', saveValues);
+        retryFailedUrlsCheckbox.addEventListener('change', saveValues);
+        maxRetriesInput.addEventListener('change', saveValues);
+        
+        // Client ID
+        clientIdInput.addEventListener('change', saveValues);
+        
+        // Load saved values on page load
+        loadSavedValues();
+        
+        // CSV file change handler
+        csvFileInput.addEventListener('change', handleCsvFileSelection);
+        
+        // Button event listeners
+        startButton.addEventListener('click', startProcessing);
+        stopButton.addEventListener('click', stopProcessing);
+        exportButton.addEventListener('click', exportResults);
+        document.getElementById('closeDetail').addEventListener('click', closeDetailView);
+        document.getElementById('applySummaryFilters').addEventListener('click', applySummaryFilters);
+        document.getElementById('resetSummaryFilters').addEventListener('click', resetSummaryFilters);
+        document.getElementById('applyTableFilters').addEventListener('click', applyTableFilters);
+        document.getElementById('resetTableFilters').addEventListener('click', resetTableFilters);
+        
+        // Toggle sections
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            section.classList.toggle('open');
+            
+            const header = section.previousElementSibling;
+            const icon = header.querySelector('span');
+            icon.textContent = section.classList.contains('open') ? '▲' : '▼';
+        }
+        
+        // Handle CSV file selection
+        function handleCsvFileSelection(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const csv = e.target.result;
+                    
+                    // Parse the first line to get headers
+                    const lines = csv.split(/\r\n|\n|\r/);
+                    if (lines.length === 0) {
+                        throw new Error('CSV file is empty');
+                    }
+                    
+                    // Parse the headers - handle both quoted and unquoted formats
+                    csvHeaders = parseCSVLine(lines[0]);
+                    
+                    // Create column mapping UI
+                    createColumnMappingUI(csvHeaders);
+                    
+                    // Parse the rest of the lines to get URLs
+                    urls = [];
+                    for (let i = 1; i < lines.length; i++) {
+                        if (lines[i].trim() === '') continue;
+                        
+                        const values = parseCSVLine(lines[i]);
+                        if (values.length >= csvHeaders.length) {
+                            urls.push({
+                                rowData: values,
+                                originalIndex: i
+                            });
+                        }
+                    }
+                    
+                    logMessage(`Successfully parsed CSV with ${urls.length} URLs`);
+                    startButton.disabled = false;
+                    
+                } catch (error) {
+                    logMessage(`Error parsing CSV: ${error.message}`, 'error');
+                }
+            };
+            reader.readAsText(file);
+        }
+        
+        // Parse a CSV line handling quoted values
+        function parseCSVLine(line) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    // Check if this is an escaped quote (double quote inside quotes)
+                    if (inQuotes && i + 1 < line.length && line[i + 1] === '"') {
+                        current += '"';
+                        i++; // Skip the next quote
+                    } else {
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === ',' && !inQuotes) {
+                    result.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            
+            // Add the last value
+            result.push(current);
+            return result;
+        }
+        
+        // Create column mapping UI
+        function createColumnMappingUI(headers) {
+            columnMappingDiv.innerHTML = '';
+            
+            // URL Column Selection
+            const urlGroup = document.createElement('div');
+            urlGroup.className = 'form-group';
+            
+            const urlLabel = document.createElement('label');
+            urlLabel.setAttribute('for', 'urlColumn');
+            urlLabel.textContent = 'URL Column:';
+            
+            const urlSelect = document.createElement('select');
+            urlSelect.id = 'urlColumn';
+            urlSelect.required = true;
+            
+            // Add an option for each header
+            headers.forEach((header, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = header;
+                // Try to auto-select columns with 'url' in the name
+                if (header.toLowerCase().includes('url')) {
+                    option.selected = true;
+                    urlColumnIndex = index;
+                }
+                urlSelect.appendChild(option);
+            });
+            
+            urlSelect.addEventListener('change', function() {
+                urlColumnIndex = parseInt(this.value);
+            });
+            
+            urlGroup.appendChild(urlLabel);
+            urlGroup.appendChild(urlSelect);
+            columnMappingDiv.appendChild(urlGroup);
+            
+            // Keyword Column Selection (optional)
+            const keywordGroup = document.createElement('div');
+            keywordGroup.className = 'form-group';
+            
+            const keywordLabel = document.createElement('label');
+            keywordLabel.setAttribute('for', 'keywordColumn');
+            keywordLabel.textContent = 'Target Keyword Column (optional):';
+            
+            const keywordSelect = document.createElement('select');
+            keywordSelect.id = 'keywordColumn';
+            
+            // Add "None" option first
+            const noneOption = document.createElement('option');
+            noneOption.value = -1;
+            noneOption.textContent = '-- None --';
+            keywordSelect.appendChild(noneOption);
+            
+            // Add an option for each header
+            headers.forEach((header, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = header;
+                // Try to auto-select columns with 'keyword' in the name
+                if (header.toLowerCase().includes('keyword')) {
+                    option.selected = true;
+                    keywordColumnIndex = index;
+                }
+                keywordSelect.appendChild(option);
+            });
+            
+            keywordSelect.addEventListener('change', function() {
+                keywordColumnIndex = parseInt(this.value);
+            });
+            
+            keywordGroup.appendChild(keywordLabel);
+            keywordGroup.appendChild(keywordSelect);
+            columnMappingDiv.appendChild(keywordGroup);
+            
+            // If we didn't auto-select the URL column, default to the first column
+            if (urlColumnIndex === -1 && headers.length > 0) {
+                urlSelect.value = 0;
+                urlColumnIndex = 0;
+            }
+        }
+        
+        // Start processing
+        function startProcessing() {
+            if (urlColumnIndex === -1) {
+                logMessage('Please select a URL column first', 'error');
+                return;
+            }
+            
+            if (urls.length === 0) {
+                logMessage('No URLs to process', 'error');
+                return;
+            }
+            
+            if (saveToDatabase.checked && !clientIdInput.value) {
+                logMessage('Client ID is required for database saving', 'error');
+                return;
+            }
+            
+            isProcessing = true;
+            shouldStop = false;
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            exportButton.disabled = true;
+            
+            // Reset results
+            processingResults = [];
+            dbSaveResults = [];
+            processingQueue = [...urls];
+            activeWorkers = 0;
+            
+            // Add retry counts to queue items
+            processingQueue.forEach(item => {
+                item.retryCount = 0;
+                item.lastError = null;
+            });
+            
+            // Reset UI
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+            processedCount.textContent = '0';
+            totalCount.textContent = urls.length;
+            resultsBody.innerHTML = '<tr><td colspan="9" style="text-align: center;">Processing...</td></tr>';
+            dbResultsBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">Processing...</td></tr>';
+            
+            // Save configuration to ensure persistence
+            saveValues();
+            
+            // Log configuration details
+            const usingScraperApi = document.getElementById('useScraperApi').checked;
+            const scraperApiKey = document.getElementById('scraperApiKey').value;
+            const corsProxy = corsProxyInput.value.trim();
+            const useLocalProxy = document.getElementById('useLocalProxy').checked;
+            const localProxyUrl = document.getElementById('localProxyUrl').value.trim();
+            const maxRetries = parseInt(maxRetriesInput.value);
+            const retryEnabled = retryFailedUrlsCheckbox.checked;
+            
+            // Determine and log the fetch strategy based on configuration
+            let primaryMethod = 'Direct fetch';
+            let fallbackMethods = [];
+            
+            if (usingScraperApi && scraperApiKey) {
+                primaryMethod = `ScraperAPI (${document.getElementById('scraperApiOptions').value})`;
+                if (corsProxy) fallbackMethods.push('CORS proxy');
+                if (useLocalProxy && localProxyUrl) fallbackMethods.push('Local proxy');
+            } else if (useCorsProxy && corsProxy) {
+                primaryMethod = 'CORS proxy';
+                if (scraperApiKey) fallbackMethods.push('ScraperAPI');
+                if (useLocalProxy && localProxyUrl) fallbackMethods.push('Local proxy');
+            } else if (useLocalProxy && localProxyUrl) {
+                primaryMethod = 'Local proxy';
+                if (corsProxy) fallbackMethods.push('CORS proxy');
+                if (scraperApiKey) fallbackMethods.push('ScraperAPI');
+            } else {
+                primaryMethod = 'Direct fetch';
+                if (corsProxy) fallbackMethods.push('CORS proxy');
+                if (scraperApiKey) fallbackMethods.push('ScraperAPI');
+                if (useLocalProxy && localProxyUrl) fallbackMethods.push('Local proxy');
+            }
+            
+            let fetchMethodLog = primaryMethod;
+            if (fallbackMethods.length > 0) {
+                fetchMethodLog += ` with fallback to ${fallbackMethods.join(', ')}`;
+            }
+            
+            // Special check for protected sites
+            const hasProtectedSites = urls.some(u => {
+                const url = u.rowData[urlColumnIndex].trim();
+                return url.includes('orientaltrading.com') || 
+                       url.includes('wayfair.com') || 
+                       url.includes('homedepot.com') ||
+                       url.includes('walmart.com');
+            });
+            
+            if (hasProtectedSites) {
+                if (scraperApiKey) {
+                    logMessage(`⚠️ Some protected sites detected (orientaltrading.com, etc). ScraperAPI will be used automatically for these sites.`, 'warning');
+                } else {
+                    logMessage(`⚠️ WARNING: Protected sites detected, but no ScraperAPI key provided. These sites may fail to load.`, 'error');
+                }
+            }
+            
+            logMessage(`Starting to process ${urls.length} URLs with ${concurrentRequestsInput.value} concurrent workers`);
+            logMessage(`Using ${modelVersionSelect.value} with thinking ${enableThinkingCheckbox.checked ? 'enabled' : 'disabled'}`);
+            logMessage(`Fetch method: ${fetchMethodLog}`);
+            logMessage(`Auto-retry: ${retryEnabled ? 'Enabled (max ' + maxRetries + ' retries)' : 'Disabled'}`);
+            
+            if (retryEnabled && maxRetries > 0) {
+                logMessage(`Note: Failed URLs will be retried automatically up to ${maxRetries} times with different fetch methods`);
+            }
+            
+            // Start processing workers
+            const maxWorkers = parseInt(concurrentRequestsInput.value);
+            for (let i = 0; i < Math.min(maxWorkers, processingQueue.length); i++) {
+                startWorker();
+            }
+        }
+        
+        // Start a worker
+        function startWorker() {
+            if (processingQueue.length === 0 || shouldStop) return;
+            
+            activeWorkers++;
+            const urlObj = processingQueue.shift();
+            
+            // Get the URL for logging
+            const url = urlObj.rowData[urlColumnIndex].trim();
+            
+            // Log retry attempt if this is a retry
+            if (urlObj.retryCount > 0) {
+                logMessage(`Retry attempt ${urlObj.retryCount} for: ${url} (Previous error: ${urlObj.lastError})`, 'warning');
+            }
+            
+            processUrl(urlObj)
+                .then(() => {
+                    activeWorkers--;
+                    updateProgress();
+                    
+                    // If we're still processing and there are URLs in the queue, start a new worker
+                    if (isProcessing && processingQueue.length > 0 && !shouldStop) {
+                        startWorker();
+                    } else if (activeWorkers === 0) {
+                        finishProcessing();
+                    }
+                })
+                .catch(error => {
+                    // Check if we should retry
+                    const maxRetries = parseInt(maxRetriesInput.value);
+                    const retryEnabled = retryFailedUrlsCheckbox.checked;
+                    
+                    if (retryEnabled && urlObj.retryCount < maxRetries) {
+                        // Store the error message for logging on retry
+                        urlObj.lastError = error.message;
+                        
+                        // Increment retry count
+                        urlObj.retryCount++;
+                        
+                        // Add back to the queue at the end
+                        processingQueue.push(urlObj);
+                        
+                        logMessage(`Failed to process ${url}: ${error.message}. Will retry (${urlObj.retryCount}/${maxRetries})`, 'warning');
+                    } else {
+                        // Log final failure
+                        if (urlObj.retryCount > 0) {
+                            logMessage(`Failed to process ${url} after ${urlObj.retryCount} retries: ${error.message}`, 'error');
+                        } else {
+                            logMessage(`Failed to process ${url}: ${error.message}`, 'error');
+                        }
+                    }
+                    
+                    activeWorkers--;
+                    updateProgress();
+                    
+                    // If we're still processing and there are URLs in the queue, start a new worker
+                    if (isProcessing && processingQueue.length > 0 && !shouldStop) {
+                        startWorker();
+                    } else if (activeWorkers === 0) {
+                        finishProcessing();
+                    }
+                });
+        }
+        
+        // Process a single URL
+        async function processUrl(urlObj) {
+            const url = urlObj.rowData[urlColumnIndex].trim();
+            const keyword = keywordColumnIndex >= 0 ? urlObj.rowData[keywordColumnIndex].trim() : '';
+            
+            logMessage(`Processing: ${url} ${keyword ? '(keyword: ' + keyword + ')' : ''}`);
+            
+            try {
+                // First, fetch the HTML from the URL
+                let html;
+                
+                try {
+                    // Get config values
+                    const useScraperApi = document.getElementById('useScraperApi').checked;
+                    const scraperApiKey = document.getElementById('scraperApiKey').value;
+                    const corsProxy = corsProxyInput.value.trim();
+                    const isKnownProtectedSite = 
+                        url.includes('orientaltrading.com') || 
+                        url.includes('wayfair.com') || 
+                        url.includes('homedepot.com') ||
+                        url.includes('walmart.com');
+                    
+                    // Smart fetch strategy based on URL and config
+                    if (isKnownProtectedSite && scraperApiKey) {
+                        // For known protected sites, use ScraperAPI first if key is available
+                        logMessage(`Detected protected site (${url}), using ScraperAPI as first option`);
+                        const originalUseScraperApi = document.getElementById('useScraperApi').checked;
+                        const originalScraperApiOption = document.getElementById('scraperApiOptions').value;
+                        
+                        try {
+                            // Temporarily enable ScraperAPI with premium or ultra for protected sites
+                            document.getElementById('useScraperApi').checked = true;
+                            
+                            // For orientaltrading.com, always use ultra premium tier
+                            if (url.includes('orientaltrading.com')) {
+                                document.getElementById('scraperApiOptions').value = 'ultra';
+                            } else if (originalScraperApiOption === 'regular') {
+                                document.getElementById('scraperApiOptions').value = 'premium';
+                            }
+                            
+                            // Make sure JS rendering is enabled
+                            document.getElementById('scraperApiRender').checked = true;
+                            
+                            html = await fetchUrlHtml(url);
+                            
+                            // Reset settings
+                            document.getElementById('useScraperApi').checked = originalUseScraperApi;
+                            document.getElementById('scraperApiOptions').value = originalScraperApiOption;
+                            
+                        } catch (scraperError) {
+                            // Reset settings in case of error
+                            document.getElementById('useScraperApi').checked = originalUseScraperApi;
+                            document.getElementById('scraperApiOptions').value = originalScraperApiOption;
+                            
+                            // If even ScraperAPI fails with ultra premium, try CORS proxy if available
+                            if (corsProxy) {
+                                logMessage(`ScraperAPI failed for protected site, trying CORS proxy as last resort`, 'warning');
+                                
+                                // Important: Disable ScraperAPI when using CORS proxy to avoid double-processing
+                                const tempScraperApiState = document.getElementById('useScraperApi').checked;
+                                document.getElementById('useScraperApi').checked = false;
+                                
+                                try {
+                                    html = await fetchUrlHtml(`${corsProxy}${encodeURIComponent(url)}`);
+                                } finally {
+                                    // Restore original ScraperAPI setting
+                                    document.getElementById('useScraperApi').checked = tempScraperApiState;
+                                }
+                            } else {
+                                throw scraperError;
+                            }
+                        }
+                    } 
+                    // Use ScraperAPI directly if configured
+                    else if (useScraperApi && scraperApiKey) {
+                        html = await fetchUrlHtml(url);
+                    } 
+                    // Use intelligent fallback strategy for standard sites
+                    else {
+                        try {
+                            // Try direct fetch first
+                            html = await fetchUrlHtml(url);
+                        } catch (directError) {
+                            // Store the original error message for better reporting
+                            const directErrorMsg = directError.message;
+                            
+                            // For CORS errors, try the CORS proxy next
+                            if (directErrorMsg.includes('CORS') && corsProxy) {
+                                logMessage(`Direct fetch failed with CORS error, trying CORS proxy for ${url}`);
+                                try {
+                                    // Make sure URL is properly encoded for the CORS proxy
+                                    html = await fetchUrlHtml(`${corsProxy}${encodeURIComponent(url)}`);
+                                } catch (corsError) {
+                                    // If CORS proxy also fails, try ScraperAPI if available
+                                    if (scraperApiKey) {
+                                        logMessage(`CORS proxy failed, falling back to ScraperAPI for ${url}`, 'warning');
+                                        // Enable ScraperAPI temporarily
+                                        document.getElementById('useScraperApi').checked = true;
+                                        html = await fetchUrlHtml(url);
+                                        // Reset after fetch
+                                        document.getElementById('useScraperApi').checked = false;
+                                    } else {
+                                        // No more fallback options
+                                        throw new Error(`All fetch methods failed. Direct fetch: ${directErrorMsg}, CORS proxy: ${corsError.message}`);
+                                    }
+                                }
+                            } 
+                            // For non-CORS errors that look like bot protection, try ScraperAPI next
+                            else if ((directErrorMsg.includes('403') || 
+                                      directErrorMsg.includes('forbidden') || 
+                                      directErrorMsg.includes('denied') ||
+                                      directErrorMsg.includes('robot') ||
+                                      directErrorMsg.includes('captcha')) && 
+                                     scraperApiKey) {
+                                logMessage(`Direct fetch failed with possible bot protection, trying ScraperAPI for ${url}`);
+                                // Enable ScraperAPI temporarily
+                                document.getElementById('useScraperApi').checked = true;
+                                html = await fetchUrlHtml(url);
+                                // Reset after fetch
+                                document.getElementById('useScraperApi').checked = false;
+                            } 
+                            // For other errors, try CORS proxy if available, then ScraperAPI
+                            else if (corsProxy) {
+                                logMessage(`Direct fetch failed, trying CORS proxy for ${url}`);
+                                try {
+                                    // Make sure URL is properly encoded for the CORS proxy
+                                    html = await fetchUrlHtml(`${corsProxy}${encodeURIComponent(url)}`);
+                                } catch (corsError) {
+                                    // If CORS proxy also fails and we have a ScraperAPI key, try it
+                                    if (scraperApiKey) {
+                                        logMessage(`CORS proxy failed, falling back to ScraperAPI for ${url}`, 'warning');
+                                        // Enable ScraperAPI temporarily
+                                        document.getElementById('useScraperApi').checked = true;
+                                        html = await fetchUrlHtml(url);
+                                        // Reset after fetch
+                                        document.getElementById('useScraperApi').checked = false;
+                                    } else {
+                                        // No more fallback options
+                                        throw new Error(`All fetch methods failed. Direct fetch: ${directErrorMsg}, CORS proxy: ${corsError.message}`);
+                                    }
+                                }
+                            } 
+                            // If we have ScraperAPI key but no CORS proxy, try ScraperAPI directly
+                            else if (scraperApiKey) {
+                                logMessage(`Direct fetch failed, falling back to ScraperAPI for ${url}`);
+                                // Enable ScraperAPI temporarily
+                                document.getElementById('useScraperApi').checked = true;
+                                html = await fetchUrlHtml(url);
+                                // Reset after fetch
+                                document.getElementById('useScraperApi').checked = false;
+                            } 
+                            else {
+                                throw directError; // Re-throw if no fallback options
+                            }
+                        }
+                    }
+                } catch (error) {
+                    // All fetch attempts failed
+                    throw new Error(`Failed to fetch HTML: ${error.message}`);
+                }
+                
+                // Process the HTML with Claude 3.7 integration
+                const requestBody = {
+                    html,
+                    targetKeyword: keyword || 'general content',
+                    url,
+                    saveToDatabase: saveToDatabase.checked,
+                    modelVersion: modelVersionSelect.value,
+                    enableThinking: enableThinkingCheckbox.checked,
+                    thinkingBudget: parseInt(thinkingBudgetInput.value)
+                };
+                
+                // Add client and project IDs if saving to database
+                if (saveToDatabase.checked) {
+                    requestBody.clientId = clientIdInput.value;
+                    if (projectIdInput.value) {
+                        requestBody.projectId = projectIdInput.value;
+                    }
+                }
+                
+                const response = await fetch(apiEndpointInput.value, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`API error ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Unknown API error');
+                }
+                
+                // Track database save result
+                if (saveToDatabase.checked) {
+                    dbSaveResults.push({
+                        url,
+                        success: data.databaseSave?.success || false,
+                        id: data.databaseSave?.id || null,
+                        table: data.databaseSave?.table || null,
+                        reason: data.databaseSave?.reason || null
+                    });
+                    
+                    // Update database results table
+                    updateDbResults();
+                }
+                
+                // Store the result
+                const processedResult = {
+                    url,
+                    keyword,
+                    status: 'success',
+                    result: data.analysis,
+                    databaseSave: data.databaseSave,
+                    thinkingEnabled: data.thinkingEnabled,
+                    thinkingLogs: data.analysis.thinking,
+                    processingTimeMs: data.processingTimeMs,
+                    rowData: urlObj.rowData,
+                    originalIndex: urlObj.originalIndex
+                };
+                
+                processingResults.push(processedResult);
+                updateTableResults();
+                updateSummaryStats();
+                
+                logMessage(`Completed: ${url} (Score: ${data.analysis.overallScore}, Processing Time: ${data.processingTimeMs}ms, Thinking: ${data.thinkingEnabled ? 'Enabled' : 'Disabled'})`);
+                return processedResult;
+                
+            } catch (error) {
+                logMessage(`Failed: ${url} - ${error.message}`, 'error');
+                
+                // Store the error result
+                const errorResult = {
+                    url,
+                    keyword,
+                    status: 'error',
+                    error: error.message,
+                    rowData: urlObj.rowData,
+                    originalIndex: urlObj.originalIndex,
+                    databaseSave: {
+                        success: false,
+                        reason: 'Processing failed'
+                    }
+                };
+                
+                // Add to database save results list if saving was enabled
+                if (saveToDatabase.checked) {
+                    dbSaveResults.push({
+                        url,
+                        success: false,
+                        id: null,
+                        table: null,
+                        reason: 'Processing failed: ' + error.message
+                    });
+                    
+                    // Update database results table
+                    updateDbResults();
+                }
+                
+                processingResults.push(errorResult);
+                updateTableResults();
+                updateSummaryStats();
+                
+                return errorResult;
+            }
+        }
+        
+        // Fetch HTML from a URL
+        async function fetchUrlHtml(url) {
+            // Get fetch configuration
+            const useScraperApi = useScraperApiCheckbox.checked;
+            const scraperApiKey = scraperApiKeyInput.value;
+            const scraperApiOption = scraperApiOptionsSelect.value;
+            const useRender = scraperApiRenderCheckbox.checked;
+            
+            const useCorsProxy = useCorsProxyCheckbox.checked;
+            const corsProxy = corsProxyInput.value;
+            
+            const useLocalProxy = useLocalProxyCheckbox.checked;
+            const localProxyUrl = localProxyUrlInput.value;
+            
+            const fetchTimeout = parseInt(fetchTimeoutInput.value) * 1000; // Convert to ms
+            
+            // Common headers for all requests
+            const headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Cache-Control': 'no-cache'
+            };
+            
+            // Option 1: Use ScraperAPI
+            if (useScraperApi && scraperApiKey) {
+                logMessage(`Using ScraperAPI (${scraperApiOption}) to fetch: ${url}`);
+                
+                try {
+                    // Properly encode the URL for ScraperAPI
+                    const encodedUrl = encodeURIComponent(url);
+                    
+                    // Configure ScraperAPI parameters based on options
+                    const params = new URLSearchParams();
+                    params.append('api_key', scraperApiKey);
+                    params.append('url', url);
+                    params.append('country_code', 'us');
+                    params.append('device_type', 'desktop');
+                    
+                    // Set premium level based on option
+                    if (scraperApiOption === 'premium') {
+                        params.append('premium', 'true');
+                        params.append('ultra_premium', 'false');
+                    } else if (scraperApiOption === 'ultra') {
+                        params.append('premium', 'true');
+                        params.append('ultra_premium', 'true');
+                    } else {
+                        params.append('premium', 'false');
+                        params.append('ultra_premium', 'false');
+                    }
+                    
+                    // JavaScript rendering - critical for sites with bot protection
+                    params.append('render', useRender ? 'true' : 'false');
+                    
+                    // Check for protected sites
+                    const protectedSites = ['orientaltrading.com', 'wayfair.com', 'homedepot.com', 'walmart.com'];
+                    // Check if any protected site is in the URL (handle direct URL and CORS proxy URL)
+                    const isProtectedSite = protectedSites.some(site => {
+                        // Check direct URL
+                        if (url.includes(site)) return true;
+                        // Check if it's a CORS proxy URL by looking for the site after the proxy
+                        if (url.includes('corsproxy.io') && url.includes(encodeURIComponent(site))) return true;
+                        if (url.includes('allorigins.win') && url.includes(encodeURIComponent(site))) return true;
+                        return false;
+                    });
+                    
+                    // Build the ScraperAPI URL directly without using URLSearchParams for reassignment
+                    let scraperUrlParams = '';
+                    
+                    // Add the basic parameters
+                    scraperUrlParams += `api_key=${encodeURIComponent(scraperApiKey)}`;
+                    scraperUrlParams += `&url=${encodeURIComponent(url)}`;
+                    scraperUrlParams += `&country_code=us`;
+                    scraperUrlParams += `&device_type=desktop`;
+                    
+                    // Set premium levels based on site and options
+                    if (isProtectedSite) {
+                        logMessage(`Detected protected site (${url}), using enhanced protection settings`);
+                        
+                        // For protected sites, always use premium
+                        scraperUrlParams += `&premium=true`;
+                        
+                        // For orientaltrading.com, use ultra premium
+                        if (url.includes('orientaltrading.com')) {
+                            scraperUrlParams += `&ultra_premium=true`;
+                            logMessage(`Using ultra premium for orientaltrading.com`);
+                        } else {
+                            scraperUrlParams += `&ultra_premium=false`;
+                        }
+                        
+                        // Always force JavaScript rendering for protected sites
+                        scraperUrlParams += `&render=true`;
+                        
+                        // Use custom session for consistent results
+                        scraperUrlParams += `&session_number=1337`;
+                        
+                        // Increase timeout for these sites
+                        const originalTimeout = fetchTimeout;
+                        fetchTimeout = Math.max(fetchTimeout, 120000); // At least 2 minutes
+                        if (originalTimeout !== fetchTimeout) {
+                            logMessage(`Increased timeout to ${fetchTimeout/1000}s for protected site`);
+                        }
+                    } else {
+                        // For standard sites, use selected option
+                        if (scraperApiOption === 'premium') {
+                            scraperUrlParams += `&premium=true&ultra_premium=false`;
+                        } else if (scraperApiOption === 'ultra') {
+                            scraperUrlParams += `&premium=true&ultra_premium=true`;
+                        } else {
+                            scraperUrlParams += `&premium=false&ultra_premium=false`;
+                        }
+                        
+                        // Use render setting as specified
+                        scraperUrlParams += `&render=${useRender ? 'true' : 'false'}`;
+                    }
+                    
+                    // Add other options
+                    scraperUrlParams += `&keep_headers=true`;
+                    scraperUrlParams += `&retry_404=true`;
+                    scraperUrlParams += `&retry_failed_requests=true`;
+                    scraperUrlParams += `&residential=false`; // Set to true for more expensive but lower detection chance
+                    
+                    // Build the complete URL
+                    const scraperUrl = `https://api.scraperapi.com/?${scraperUrlParams}`;
+                    
+                    logMessage(`ScraperAPI request with options: ${scraperApiOption}, render: ${useRender ? 'enabled' : 'disabled'}, timeout: ${fetchTimeout/1000}s`);
+                    
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), fetchTimeout);
+                    
+                    try {
+                        const response = await fetch(scraperUrl, {
+                            method: 'GET',
+                            headers: headers,
+                            signal: controller.signal,
+                            // Increase request timeout for potentially slow ScraperAPI responses
+                            cache: 'no-store' // Ensure fresh content
+                        });
+                        
+                        clearTimeout(timeoutId);
+                        
+                        if (!response.ok) {
+                            throw new Error(`ScraperAPI error ${response.status}: ${response.statusText}`);
+                        }
+                        
+                        const html = await response.text();
+                        
+                        // Enhanced content validation
+                        if (!html) {
+                            throw new Error(`ScraperAPI returned empty content`);
+                        }
+                        
+                        if (html.length < 1000) {
+                            // Check for common error patterns
+                            if (html.includes('captcha') || html.includes('CAPTCHA') || 
+                                html.includes('Access Denied') || html.includes('Robot Detection')) {
+                                throw new Error(`ScraperAPI hit bot protection (${html.length} bytes). Try ultra premium tier.`);
+                            }
+                            
+                            if (html.length < 100) {
+                                throw new Error(`ScraperAPI returned suspiciously short content (${html.length} bytes)`);
+                            } else {
+                                // Log warning but continue
+                                logMessage(`Warning: ScraperAPI returned relatively short content (${html.length} bytes)`, 'warning');
+                            }
+                        }
+                        
+                        logMessage(`Successfully fetched HTML for ${url} (${html.length} bytes)`);
+                        return html;
+                    } catch (fetchError) {
+                        clearTimeout(timeoutId);
+                        if (fetchError.name === 'AbortError') {
+                            throw new Error(`ScraperAPI request timed out after ${fetchTimeout/1000} seconds. Try increasing timeout.`);
+                        }
+                        throw fetchError;
+                    }
+                } catch (error) {
+                    logMessage(`ScraperAPI error: ${error.message}`, 'error');
+                    
+                    // Specific guidance based on error
+                    if (error.message.includes('bot protection') || error.message.includes('captcha')) {
+                        logMessage(`Suggestion: For ${url}, try using the ultra premium tier or enable residential proxies`, 'warning');
+                    }
+                    
+                    throw new Error(`ScraperAPI error: ${error.message}`);
+                }
+            }
+            // Option 2: Use CORS Proxy
+            else if (useCorsProxy && corsProxy) {
+                logMessage(`Using CORS proxy to fetch: ${url}`);
+                
+                try {
+                    const proxyUrl = `${corsProxy}${encodeURIComponent(url)}`;
+                    
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), fetchTimeout);
+                    
+                    try {
+                        const response = await fetch(proxyUrl, {
+                            method: 'GET',
+                            headers: headers,
+                            signal: controller.signal
+                        });
+                        
+                        clearTimeout(timeoutId);
+                        
+                        if (!response.ok) {
+                            throw new Error(`CORS proxy error ${response.status}: ${response.statusText}`);
+                        }
+                        
+                        const html = await response.text();
+                        
+                        // Verify we got valid HTML content
+                        if (!html || html.length < 100) {
+                            throw new Error(`CORS proxy returned empty or too short content (${html.length} bytes)`);
+                        }
+                        
+                        logMessage(`Successfully fetched HTML for ${url} (${html.length} bytes)`);
+                        return html;
+                    } catch (fetchError) {
+                        clearTimeout(timeoutId);
+                        if (fetchError.name === 'AbortError') {
+                            throw new Error(`CORS proxy request timed out after ${fetchTimeout/1000} seconds`);
+                        }
+                        throw fetchError;
+                    }
+                } catch (error) {
+                    logMessage(`CORS proxy error: ${error.message}`, 'error');
+                    throw new Error(`CORS proxy error: ${error.message}`);
+                }
+            }
+            // Option 3: Use Local Proxy
+            else if (useLocalProxy && localProxyUrl) {
+                logMessage(`Using local proxy to fetch: ${url}`);
+                
+                try {
+                    const proxyUrl = `${localProxyUrl}${encodeURIComponent(url)}`;
+                    
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), fetchTimeout);
+                    
+                    try {
+                        const response = await fetch(proxyUrl, {
+                            method: 'GET',
+                            headers: headers,
+                            signal: controller.signal
+                        });
+                        
+                        clearTimeout(timeoutId);
+                        
+                        if (!response.ok) {
+                            throw new Error(`Local proxy error ${response.status}: ${response.statusText}`);
+                        }
+                        
+                        const html = await response.text();
+                        
+                        // Verify we got valid HTML content
+                        if (!html || html.length < 100) {
+                            throw new Error(`Local proxy returned empty or too short content (${html.length} bytes)`);
+                        }
+                        
+                        logMessage(`Successfully fetched HTML for ${url} (${html.length} bytes)`);
+                        return html;
+                    } catch (fetchError) {
+                        clearTimeout(timeoutId);
+                        if (fetchError.name === 'AbortError') {
+                            throw new Error(`Local proxy request timed out after ${fetchTimeout/1000} seconds`);
+                        }
+                        throw fetchError;
+                    }
+                } catch (error) {
+                    logMessage(`Local proxy error: ${error.message}`, 'error');
+                    throw new Error(`Local proxy error: ${error.message}`);
+                }
+            }
+            // Option 4: Direct fetch (default)
+            else {
+                logMessage(`Using direct fetch for: ${url}`);
+                
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), fetchTimeout);
+                    
+                    try {
+                        const response = await fetch(url, {
+                            method: 'GET',
+                            headers: headers,
+                            signal: controller.signal
+                        });
+                        
+                        clearTimeout(timeoutId);
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+                        }
+                        
+                        const html = await response.text();
+                        
+                        // Verify we got valid HTML content
+                        if (!html || html.length < 100) {
+                            throw new Error(`Direct fetch returned empty or too short content (${html.length} bytes)`);
+                        }
+                        
+                        logMessage(`Successfully fetched HTML for ${url} (${html.length} bytes)`);
+                        return html;
+                    } catch (fetchError) {
+                        clearTimeout(timeoutId);
+                        if (fetchError.name === 'AbortError') {
+                            throw new Error(`Direct fetch request timed out after ${fetchTimeout/1000} seconds`);
+                        }
+                        throw fetchError;
+                    }
+                } catch (error) {
+                    logMessage(`Direct fetch error: ${error.message}`, 'error');
+                    throw error;
+                }
+            }
+        }
+        
+        // Update progress
+        function updateProgress() {
+            const processed = processingResults.length;
+            const total = urls.length;
+            const percentage = Math.round((processed / total) * 100);
+            
+            progressBar.style.width = `${percentage}%`;
+            processedCount.textContent = processed;
+            
+            if (shouldStop) {
+                statusMessage.textContent = `Stopped: ${processed} / ${total} (${percentage}%)`;
+            } else {
+                statusMessage.textContent = `Processed: ${processed} / ${total} (${percentage}%)`;
+            }
+        }
+        
+        // Stop processing
+        function stopProcessing() {
+            shouldStop = true;
+            isProcessing = false;
+            stopButton.disabled = true;
+            logMessage('Stopping processing - waiting for active requests to complete...');
+            
+            // If no active workers, finish immediately
+            if (activeWorkers === 0) {
+                finishProcessing();
+            }
+        }
+        
+        // Finish processing
+        function finishProcessing() {
+            isProcessing = false;
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            exportButton.disabled = false;
+            
+            if (shouldStop) {
+                logMessage(`Processing stopped with ${processingResults.length} of ${urls.length} URLs processed`);
+            } else {
+                logMessage(`Processing completed for all ${urls.length} URLs`);
+            }
+            
+            // Final UI updates
+            updateTableResults();
+            updateSummaryStats();
+            updateDbResults();
+        }
+        
+        // Update results table
+        function updateTableResults() {
+            if (processingResults.length === 0) {
+                resultsBody.innerHTML = '<tr><td colspan="9" style="text-align: center;">No results yet</td></tr>';
+                return;
+            }
+            
+            // Apply any active filters
+            const filteredResults = applyTableFilters(false);
+            
+            resultsBody.innerHTML = '';
+            
+            if (filteredResults.length === 0) {
+                resultsBody.innerHTML = '<tr><td colspan="9" style="text-align: center;">No results match the current filters</td></tr>';
+                return;
+            }
+            
+            filteredResults.forEach(result => {
+                const row = document.createElement('tr');
+                
+                // URL
+                const urlCell = document.createElement('td');
+                urlCell.textContent = result.url;
+                row.appendChild(urlCell);
+                
+                // Keyword
+                const keywordCell = document.createElement('td');
+                keywordCell.textContent = result.keyword || '-';
+                row.appendChild(keywordCell);
+                
+                // Status
+                const statusCell = document.createElement('td');
+                if (result.status === 'success') {
+                    statusCell.innerHTML = '<span class="success">Success</span>';
+                } else {
+                    statusCell.innerHTML = `<span class="error">Error: ${result.error}</span>`;
+                }
+                row.appendChild(statusCell);
+                
+                // Score
+                const scoreCell = document.createElement('td');
+                if (result.status === 'success') {
+                    const score = result.result.overallScore;
+                    let scoreClass = '';
+                    if (score >= 80) scoreClass = 'high';
+                    else if (score >= 50) scoreClass = 'medium';
+                    else scoreClass = 'low';
+                    
+                    scoreCell.innerHTML = `<span class="${scoreClass}">${score}</span>`;
+                } else {
+                    scoreCell.textContent = '-';
+                }
+                row.appendChild(scoreCell);
+                
+                // Word Count
+                const wordCountCell = document.createElement('td');
+                if (result.status === 'success') {
+                    wordCountCell.textContent = result.result.wordCount;
+                } else {
+                    wordCountCell.textContent = '-';
+                }
+                row.appendChild(wordCountCell);
+                
+                // Keyword Density
+                const densityCell = document.createElement('td');
+                if (result.status === 'success' && result.result.keywordDensity) {
+                    densityCell.textContent = result.result.keywordDensity;
+                } else {
+                    densityCell.textContent = '-';
+                }
+                row.appendChild(densityCell);
+                
+                // Database Save
+                const dbSaveCell = document.createElement('td');
+                if (result.databaseSave) {
+                    if (result.databaseSave.success) {
+                        dbSaveCell.innerHTML = `<span class="success">Success (ID: ${result.databaseSave.id.substring(0, 8)}...)</span>`;
+                    } else {
+                        dbSaveCell.innerHTML = `<span class="error">Failed: ${result.databaseSave.reason || 'Unknown reason'}</span>`;
+                    }
+                } else {
+                    dbSaveCell.textContent = 'Not attempted';
+                }
+                row.appendChild(dbSaveCell);
+                
+                // Thinking
+                const thinkingCell = document.createElement('td');
+                if (result.status === 'success') {
+                    if (result.thinkingEnabled && result.thinkingLogs) {
+                        thinkingCell.innerHTML = '<span class="success">Available</span>';
+                    } else if (result.thinkingEnabled) {
+                        thinkingCell.innerHTML = '<span class="warning">Enabled but empty</span>';
+                    } else {
+                        thinkingCell.textContent = 'Disabled';
+                    }
+                } else {
+                    thinkingCell.textContent = '-';
+                }
+                row.appendChild(thinkingCell);
+                
+                // Actions
+                const actionsCell = document.createElement('td');
+                if (result.status === 'success') {
+                    const viewButton = document.createElement('button');
+                    viewButton.textContent = 'View Details';
+                    viewButton.addEventListener('click', () => {
+                        showDetailView(result);
+                    });
+                    actionsCell.appendChild(viewButton);
+                }
+                row.appendChild(actionsCell);
+                
+                resultsBody.appendChild(row);
+            });
+        }
+        
+        // Update database results table
+        function updateDbResults() {
+            if (dbSaveResults.length === 0) {
+                dbResultsBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No database saves performed yet</td></tr>';
+                dbSaveStats.innerHTML = '<p>No database saves performed yet.</p>';
+                return;
+            }
+            
+            // Create table rows
+            dbResultsBody.innerHTML = '';
+            
+            dbSaveResults.forEach(result => {
+                const row = document.createElement('tr');
+                
+                // URL
+                const urlCell = document.createElement('td');
+                urlCell.textContent = result.url;
+                row.appendChild(urlCell);
+                
+                // Save Status
+                const statusCell = document.createElement('td');
+                if (result.success) {
+                    statusCell.innerHTML = '<span class="success">Success</span>';
+                } else {
+                    statusCell.innerHTML = '<span class="error">Failed</span>';
+                }
+                row.appendChild(statusCell);
+                
+                // Record ID
+                const idCell = document.createElement('td');
+                idCell.textContent = result.id ? result.id : '-';
+                row.appendChild(idCell);
+                
+                // Table
+                const tableCell = document.createElement('td');
+                tableCell.textContent = result.table ? result.table : '-';
+                row.appendChild(tableCell);
+                
+                // Reason (if failed)
+                const reasonCell = document.createElement('td');
+                reasonCell.textContent = result.success ? '-' : (result.reason || 'Unknown error');
+                row.appendChild(reasonCell);
+                
+                dbResultsBody.appendChild(row);
+            });
+            
+            // Update DB save stats
+            const successCount = dbSaveResults.filter(r => r.success).length;
+            const failureCount = dbSaveResults.length - successCount;
+            
+            let html = `
+                <div style="display: flex; flex-wrap: wrap; margin-bottom: 20px;">
+                    <div class="metric-card">
+                        <h4>Total Database Saves</h4>
+                        <div style="font-size: 24px; font-weight: bold;">${dbSaveResults.length}</div>
+                    </div>
+                    <div class="metric-card" style="background-color: #d6f5d6;">
+                        <h4>Successful Saves</h4>
+                        <div style="font-size: 24px; font-weight: bold;">${successCount}</div>
+                    </div>
+                    <div class="metric-card" style="background-color: ${failureCount > 0 ? '#ffebee' : '#f8f9fa'};">
+                        <h4>Failed Saves</h4>
+                        <div style="font-size: 24px; font-weight: bold;">${failureCount}</div>
+                    </div>
+                </div>
+            `;
+            
+            // Add failure reasons if any
+            if (failureCount > 0) {
+                const reasons = {};
+                dbSaveResults.filter(r => !r.success).forEach(r => {
+                    const reason = r.reason || 'Unknown error';
+                    reasons[reason] = (reasons[reason] || 0) + 1;
+                });
+                
+                html += '<h3>Failure Reasons</h3><ul>';
+                
+                for (const [reason, count] of Object.entries(reasons)) {
+                    html += `<li>${reason}: ${count} ${count === 1 ? 'occurrence' : 'occurrences'}</li>`;
+                }
+                
+                html += '</ul>';
+            }
+            
+            dbSaveStats.innerHTML = html;
+        }
+        
+        // Update summary statistics
+        function updateSummaryStats() {
+            if (processingResults.length === 0) {
+                summaryStats.innerHTML = '<p>No data processed yet.</p>';
+                return;
+            }
+            
+            // Get successful results
+            const successResults = processingResults.filter(r => r.status === 'success');
+            
+            if (successResults.length === 0) {
+                summaryStats.innerHTML = '<p>No successful results to analyze.</p>';
+                return;
+            }
+            
+            // Apply any active filters
+            const filteredResults = applySummaryFilters(false);
+            
+            if (filteredResults.length === 0) {
+                summaryStats.innerHTML = '<p>No results match the current filters.</p>';
+                return;
+            }
+            
+            // Calculate basic stats
+            const totalUrls = filteredResults.length;
+            const avgScore = filteredResults.reduce((sum, r) => sum + r.result.overallScore, 0) / totalUrls;
+            const avgWordCount = filteredResults.reduce((sum, r) => sum + r.result.wordCount, 0) / totalUrls;
+            const avgProcessingTime = filteredResults.reduce((sum, r) => sum + (r.processingTimeMs || 0), 0) / totalUrls;
+            
+            // Score distribution
+            const highScores = filteredResults.filter(r => r.result.overallScore >= 80).length;
+            const mediumScores = filteredResults.filter(r => r.result.overallScore >= 50 && r.result.overallScore < 80).length;
+            const lowScores = filteredResults.filter(r => r.result.overallScore < 50).length;
+            
+            // Word count distribution
+            const shortContent = filteredResults.filter(r => r.result.wordCount < 500).length;
+            const mediumContent = filteredResults.filter(r => r.result.wordCount >= 500 && r.result.wordCount < 1500).length;
+            const longContent = filteredResults.filter(r => r.result.wordCount >= 1500).length;
+            
+            // Common issues
+            const commonIssues = [];
+            const lowKeywordDensity = filteredResults.filter(r => parseFloat(r.result.keywordDensity) < 1).length;
+            const poorHeadingUsage = filteredResults.filter(r => r.result.headingScore < 50).length;
+            
+            if (lowKeywordDensity > totalUrls * 0.3) {
+                commonIssues.push(`${lowKeywordDensity} URLs (${Math.round(lowKeywordDensity/totalUrls*100)}%) have low keyword density (<1%)`);
+            }
+            
+            if (poorHeadingUsage > totalUrls * 0.3) {
+                commonIssues.push(`${poorHeadingUsage} URLs (${Math.round(poorHeadingUsage/totalUrls*100)}%) have poor heading optimization`);
+            }
+            
+            // Database save stats
+            const dbSaveSuccess = filteredResults.filter(r => r.databaseSave && r.databaseSave.success).length;
+            const dbSaveFailed = filteredResults.filter(r => r.databaseSave && !r.databaseSave.success).length;
+            const dbSaveNotAttempted = filteredResults.filter(r => !r.databaseSave).length;
+            
+            // Claude 3.7 stats
+            const thinkingEnabled = filteredResults.filter(r => r.thinkingEnabled).length;
+            const thinkingAvailable = filteredResults.filter(r => r.thinkingLogs).length;
+            
+            // Generate HTML
+            let html = `
+                <div style="display: flex; flex-wrap: wrap; margin-bottom: 20px;">
+                    <div class="metric-card">
+                        <h4>URLs Analyzed</h4>
+                        <div style="font-size: 24px; font-weight: bold;">${totalUrls}</div>
+                    </div>
+                    <div class="metric-card">
+                        <h4>Average Score</h4>
+                        <div style="font-size: 24px; font-weight: bold;">${avgScore.toFixed(1)}</div>
+                    </div>
+                    <div class="metric-card">
+                        <h4>Average Word Count</h4>
+                        <div style="font-size: 24px; font-weight: bold;">${avgWordCount.toFixed(0)}</div>
+                    </div>
+                    <div class="metric-card">
+                        <h4>Avg Processing Time</h4>
+                        <div style="font-size: 24px; font-weight: bold;">${avgProcessingTime.toFixed(0)}ms</div>
+                    </div>
+                </div>
+                
+                <h3>Score Distribution</h3>
+                <div style="display: flex; margin-bottom: 20px;">
+                    <div style="flex: ${highScores || 1}; background-color: #d6f5d6; padding: 10px; text-align: center;">
+                        ${highScores} High (${Math.round(highScores/totalUrls*100)}%)
+                    </div>
+                    <div style="flex: ${mediumScores || 1}; background-color: #fff8e1; padding: 10px; text-align: center;">
+                        ${mediumScores} Medium (${Math.round(mediumScores/totalUrls*100)}%)
+                    </div>
+                    <div style="flex: ${lowScores || 1}; background-color: #ffebee; padding: 10px; text-align: center;">
+                        ${lowScores} Low (${Math.round(lowScores/totalUrls*100)}%)
+                    </div>
+                </div>
+                
+                <h3>Content Length Distribution</h3>
+                <div style="display: flex; margin-bottom: 20px;">
+                    <div style="flex: ${shortContent || 1}; background-color: #e3f2fd; padding: 10px; text-align: center;">
+                        ${shortContent} Short (<500 words) (${Math.round(shortContent/totalUrls*100)}%)
+                    </div>
+                    <div style="flex: ${mediumContent || 1}; background-color: #e8f5e9; padding: 10px; text-align: center;">
+                        ${mediumContent} Medium (500-1500 words) (${Math.round(mediumContent/totalUrls*100)}%)
+                    </div>
+                    <div style="flex: ${longContent || 1}; background-color: #f3e5f5; padding: 10px; text-align: center;">
+                        ${longContent} Long (>1500 words) (${Math.round(longContent/totalUrls*100)}%)
+                    </div>
+                </div>
+                
+                <h3>Claude Thinking Stats</h3>
+                <div style="display: flex; margin-bottom: 20px;">
+                    <div style="flex: ${thinkingEnabled || 1}; background-color: #e8f5e9; padding: 10px; text-align: center;">
+                        ${thinkingEnabled} Thinking Enabled (${Math.round(thinkingEnabled/totalUrls*100)}%)
+                    </div>
+                    <div style="flex: ${thinkingAvailable || 1}; background-color: #f3e5f5; padding: 10px; text-align: center;">
+                        ${thinkingAvailable} Thinking Logs Available (${Math.round(thinkingAvailable/totalUrls*100)}%)
+                    </div>
+                </div>
+            `;
+            
+            // Add database save stats if any were attempted
+            if (dbSaveSuccess > 0 || dbSaveFailed > 0) {
+                html += `
+                    <h3>Database Save Status</h3>
+                    <div style="display: flex; margin-bottom: 20px;">
+                        <div style="flex: ${dbSaveSuccess || 1}; background-color: #d6f5d6; padding: 10px; text-align: center;">
+                            ${dbSaveSuccess} Successful (${Math.round(dbSaveSuccess/totalUrls*100)}%)
+                        </div>
+                        <div style="flex: ${dbSaveFailed || 1}; background-color: #ffebee; padding: 10px; text-align: center;">
+                            ${dbSaveFailed} Failed (${Math.round(dbSaveFailed/totalUrls*100)}%)
+                        </div>
+                        ${dbSaveNotAttempted > 0 ? `
+                            <div style="flex: ${dbSaveNotAttempted || 1}; background-color: #f8f9fa; padding: 10px; text-align: center;">
+                                ${dbSaveNotAttempted} Not Attempted (${Math.round(dbSaveNotAttempted/totalUrls*100)}%)
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }
+            
+            // Add common issues if any
+            if (commonIssues.length > 0) {
+                html += `
+                    <h3>Common Issues</h3>
+                    <ul>
+                        ${commonIssues.map(issue => `<li>${issue}</li>`).join('')}
+                    </ul>
+                `;
+            }
+            
+            summaryStats.innerHTML = html;
+        }
+        
+        // Show detail view for a result
+        function showDetailView(result) {
+            detailViewCurrentUrl = result.url;
+            
+            document.getElementById('detailTitle').textContent = result.url;
+            document.getElementById('detailKeyword').querySelector('span').textContent = result.keyword || 'None specified';
+            
+            // Update metrics
+            document.getElementById('detailScore').textContent = result.result.overallScore;
+            document.getElementById('detailWordCount').textContent = result.result.wordCount;
+            document.getElementById('detailKeywordDensity').textContent = result.result.keywordDensity;
+            document.getElementById('detailHeadingScore').textContent = result.result.headingScore;
+            
+            // Update top keywords
+            const keywordsContainer = document.getElementById('detailTopKeywords');
+            keywordsContainer.innerHTML = '';
+            
+            if (result.result.keywords && result.result.keywords.length > 0) {
+                result.result.keywords.forEach(keyword => {
+                    const keywordElem = document.createElement('div');
+                    keywordElem.className = 'keyword-item';
+                    keywordElem.textContent = `${keyword.term} (${keyword.count})`;
+                    keywordsContainer.appendChild(keywordElem);
+                });
+            } else {
+                keywordsContainer.textContent = 'No keyword data available';
+            }
+            
+            // Update headings
+            const headingsContainer = document.getElementById('detailHeadings');
+            headingsContainer.innerHTML = '';
+            
+            if (result.result.headings && result.result.headings.length > 0) {
+                result.result.headings.forEach(heading => {
+                    const headingElem = document.createElement('div');
+                    headingElem.className = 'heading-item';
+                    
+                    // Parse heading format (usually "h1: Heading Text")
+                    const matches = heading.match(/^([a-z0-9]+):\s(.+)$/i);
+                    if (matches) {
+                        const tag = matches[1];
+                        const text = matches[2];
+                        const containsKeyword = result.keyword && text.toLowerCase().includes(result.keyword.toLowerCase());
+                        
+                        headingElem.innerHTML = `
+                            <strong>${tag}:</strong> ${text}
+                            ${containsKeyword ? 
+                                '<span style="float:right; color: green;">✓ Contains keyword</span>' : 
+                                ''}
+                        `;
+                    } else {
+                        headingElem.textContent = heading;
+                    }
+                    
+                    headingsContainer.appendChild(headingElem);
+                });
+            } else {
+                headingsContainer.textContent = 'No headings found';
+            }
+            
+            // Update recommendations
+            const recommendationsContainer = document.getElementById('detailRecommendations');
+            recommendationsContainer.innerHTML = '';
+            
+            if (result.result.recommendations && result.result.recommendations.length > 0) {
+                result.result.recommendations.forEach(recommendation => {
+                    const li = document.createElement('li');
+                    li.textContent = recommendation;
+                    recommendationsContainer.appendChild(li);
+                });
+            } else {
+                recommendationsContainer.innerHTML = '<li>No recommendations available</li>';
+            }
+            
+            // Update thinking logs
+            const thinkingLogsContainer = document.getElementById('detailThinkingLogs');
+            if (result.thinkingLogs) {
+                thinkingLogsContainer.textContent = result.thinkingLogs;
+                // Open the thinking logs section
+                document.getElementById('thinkingLogs').classList.add('open');
+            } else {
+                thinkingLogsContainer.textContent = result.thinkingEnabled ? 
+                    'Thinking was enabled but no logs were returned.' : 
+                    'Thinking was disabled for this analysis.';
+            }
+            
+            // Update database info
+            const dbInfoContainer = document.getElementById('detailDbContent');
+            if (result.databaseSave) {
+                if (result.databaseSave.success) {
+                    dbInfoContainer.innerHTML = `
+                        <p><strong>Status:</strong> <span class="success">Saved successfully</span></p>
+                        <p><strong>Record ID:</strong> ${result.databaseSave.id}</p>
+                        <p><strong>Table:</strong> ${result.databaseSave.table}</p>
+                    `;
+                } else {
+                    dbInfoContainer.innerHTML = `
+                        <p><strong>Status:</strong> <span class="error">Save failed</span></p>
+                        <p><strong>Reason:</strong> ${result.databaseSave.reason || 'Unknown error'}</p>
+                    `;
+                }
+            } else {
+                dbInfoContainer.innerHTML = '<p>Not saved to database</p>';
+            }
+            
+            // Show the detail view
+            detailView.style.display = 'block';
+            
+            // Scroll to the detail view
+            detailView.scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // Close detail view
+        function closeDetailView() {
+            detailView.style.display = 'none';
+            detailViewCurrentUrl = null;
+        }
+        
+        // Apply table filters
+        function applyTableFilters(updateUI = true) {
+            const urlFilter = document.getElementById('urlFilter').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+            
+            const filteredResults = processingResults.filter(result => {
+                // Filter by URL
+                if (urlFilter && !result.url.toLowerCase().includes(urlFilter)) {
+                    return false;
+                }
+                
+                // Filter by status
+                if (statusFilter !== 'all' && result.status !== statusFilter) {
+                    return false;
+                }
+                
+                return true;
+            });
+            
+            if (updateUI) {
+                updateTableResults();
+            }
+            
+            return filteredResults;
+        }
+        
+        // Reset table filters
+        function resetTableFilters() {
+            document.getElementById('urlFilter').value = '';
+            document.getElementById('statusFilter').value = 'all';
+            updateTableResults();
+        }
+        
+        // Apply summary filters
+        function applySummaryFilters(updateUI = true) {
+            const keywordFilter = document.getElementById('keywordFilter').value.toLowerCase();
+            const scoreFilter = document.getElementById('scoreFilter').value;
+            
+            // Get successful results first
+            const successResults = processingResults.filter(r => r.status === 'success');
+            
+            const filteredResults = successResults.filter(result => {
+                // Filter by keyword
+                if (keywordFilter && result.keyword && !result.keyword.toLowerCase().includes(keywordFilter)) {
+                    return false;
+                }
+                
+                // Filter by score
+                if (scoreFilter !== 'all') {
+                    const score = result.result.overallScore;
+                    if (scoreFilter === 'high' && score < 80) return false;
+                    if (scoreFilter === 'medium' && (score < 50 || score >= 80)) return false;
+                    if (scoreFilter === 'low' && score >= 50) return false;
+                }
+                
+                return true;
+            });
+            
+            if (updateUI) {
+                updateSummaryStats();
+            }
+            
+            return filteredResults;
+        }
+        
+        // Reset summary filters
+        function resetSummaryFilters() {
+            document.getElementById('keywordFilter').value = '';
+            document.getElementById('scoreFilter').value = 'all';
+            updateSummaryStats();
+        }
+        
+        // Export results to CSV
+        function exportResults() {
+            const exportOption = document.getElementById('exportOptions').value;
+            const filename = document.getElementById('exportFilename').value;
+            const includeDbResults = document.getElementById('exportDbResults').checked;
+            const includeThinking = document.getElementById('exportThinking').checked;
+            
+            // Filter results based on export option
+            let resultsToExport;
+            if (exportOption === 'success') {
+                resultsToExport = processingResults.filter(r => r.status === 'success');
+            } else if (exportOption === 'error') {
+                resultsToExport = processingResults.filter(r => r.status === 'error');
+            } else {
+                resultsToExport = processingResults;
+            }
+            
+            if (resultsToExport.length === 0) {
+                logMessage('No results to export', 'warning');
+                return;
+            }
+            
+            try {
+                // Generate CSV header based on what to include
+                let csvHeader = 'URL,Keyword,Status,Score,Word Count,Keyword Density,Heading Score,Processing Time (ms)';
+                
+                if (includeDbResults) {
+                    csvHeader += ',DB Save Status,DB Record ID,DB Table';
+                }
+                
+                if (includeThinking) {
+                    csvHeader += ',Thinking Enabled,Thinking Logs';
+                }
+                
+                csvHeader += ',Recommendations\n';
+                
+                // Add data rows
+                let csvContent = csvHeader;
+                
+                resultsToExport.forEach(result => {
+                    const url = escapeCsvField(result.url);
+                    const keyword = escapeCsvField(result.keyword || '');
+                    const status = escapeCsvField(result.status);
+                    
+                    let score = '';
+                    let wordCount = '';
+                    let keywordDensity = '';
+                    let headingScore = '';
+                    let processingTime = '';
+                    let recommendations = '';
+                    
+                    if (result.status === 'success') {
+                        score = result.result.overallScore;
+                        wordCount = result.result.wordCount;
+                        keywordDensity = result.result.keywordDensity || '';
+                        headingScore = result.result.headingScore || '';
+                        processingTime = result.processingTimeMs || '';
+                        
+                        if (result.result.recommendations && result.result.recommendations.length > 0) {
+                            recommendations = escapeCsvField(result.result.recommendations.join('; '));
+                        }
+                    } else {
+                        // For errors, add the error message to the recommendations field
+                        recommendations = escapeCsvField(result.error || '');
+                    }
+                    
+                    let row = `${url},${keyword},${status},${score},${wordCount},${keywordDensity},${headingScore},${processingTime}`;
+                    
+                    // Add database fields if requested
+                    if (includeDbResults) {
+                        let dbStatus = 'Not attempted';
+                        let dbId = '';
+                        let dbTable = '';
+                        
+                        if (result.databaseSave) {
+                            dbStatus = result.databaseSave.success ? 'Success' : 'Failed';
+                            dbId = result.databaseSave.id || '';
+                            dbTable = result.databaseSave.table || '';
+                        }
+                        
+                        row += `,${dbStatus},${dbId},${dbTable}`;
+                    }
+                    
+                    // Add thinking fields if requested
+                    if (includeThinking) {
+                        const thinkingEnabled = result.thinkingEnabled ? 'Yes' : 'No';
+                        const thinkingLogs = result.thinkingLogs ? escapeCsvField(result.thinkingLogs) : '';
+                        
+                        row += `,${thinkingEnabled},${thinkingLogs}`;
+                    }
+                    
+                    row += `,${recommendations}\n`;
+                    csvContent += row;
+                });
+                
+                // Create a download link
+                const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.setAttribute('href', url);
+                link.setAttribute('download', filename);
+                link.style.display = 'none';
+                
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                logMessage(`Exported ${resultsToExport.length} results to ${filename}`);
+                
+            } catch (error) {
+                logMessage(`Export error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Escape CSV field
+        function escapeCsvField(field) {
+            if (field === null || field === undefined) return '""';
+            
+            // Convert to string
+            const str = String(field);
+            
+            // Check if we need to escape
+            if (str.includes('"') || str.includes(',') || str.includes('\n') || str.includes('\r')) {
+                // Escape double quotes by doubling them and wrap in quotes
+                return `"${str.replace(/"/g, '""')}"`;
+            }
+            
+            return str;
+        }
+        
+        // Tab handling
+        function openTab(evt, tabName) {
+            // Hide all tab content
+            const tabcontent = document.getElementsByClassName('tabcontent');
+            for (let i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = 'none';
+            }
+            
+            // Remove active class from all tab buttons
+            const tablinks = document.getElementsByClassName('tablinks');
+            for (let i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(' active', '');
+            }
+            
+            // Show the current tab and add active class to the button
+            document.getElementById(tabName).style.display = 'block';
+            evt.currentTarget.className += ' active';
+        }
+        
+        // Log message
+        function logMessage(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logItem = document.createElement('div');
+            
+            if (type === 'error') {
+                logItem.className = 'error';
+                logItem.textContent = `[${timestamp}] ERROR: ${message}`;
+            } else if (type === 'warning') {
+                logItem.className = 'warning';
+                logItem.textContent = `[${timestamp}] WARNING: ${message}`;
+            } else {
+                logItem.textContent = `[${timestamp}] ${message}`;
+            }
+            
+            processLogs.appendChild(logItem);
+            processLogs.scrollTop = processLogs.scrollHeight;
+        }
+        
+        // Open the Data Source and Claude Config sections by default
+        document.getElementById('dataSource').classList.add('open');
+        document.getElementById('claudeConfig').classList.add('open');
+    </script>
+</body>
+</html>
