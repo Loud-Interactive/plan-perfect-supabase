@@ -14,8 +14,8 @@ serve(async (req) => {
   }
 
   try {
-    const { content_plan_guid, post_title, content_plan_keyword, post_keyword, domain } = await req.json();
-    
+    const { content_plan_guid, post_title, content_plan_keyword, post_keyword, domain, fast = false } = await req.json();
+
     if (!post_title || !content_plan_keyword || !post_keyword || !domain) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields' }),
@@ -37,7 +37,8 @@ serve(async (req) => {
         content_plan_keyword,
         post_keyword,
         domain,
-        status: 'started'
+        status: 'started',
+        fast_mode: fast
       })
       .select()
       .single();
@@ -68,18 +69,22 @@ serve(async (req) => {
 
     // Start the search process
     try {
-      console.log(`Attempting to start search-outline-content for job_id: ${job.id}`);
-      
+      // Route to appropriate function based on fast mode
+      const targetFunction = fast ? 'fast-outline-search' : 'search-outline-content';
+      const targetStatus = fast ? 'fast_search_started' : 'initializing_search_process';
+
+      console.log(`Attempting to start ${targetFunction} for job_id: ${job.id}`);
+
       // Add status record for search initialization
       await supabase
         .from('content_plan_outline_statuses')
         .insert({
           outline_guid: job.id,
-          status: 'initializing_search_process'
+          status: targetStatus
         });
-      
+
       // Make sure we properly await the response
-      const searchResponse = await fetch(`${supabaseUrl}/functions/v1/search-outline-content`, {
+      const searchResponse = await fetch(`${supabaseUrl}/functions/v1/${targetFunction}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -91,36 +96,82 @@ serve(async (req) => {
       // Check if the response is ok (status in the range 200-299)
       if (!searchResponse.ok) {
         const errorText = await searchResponse.text();
-        console.error(`Failed to start search-outline-content. Status: ${searchResponse.status}, Error: ${errorText}`);
-        
-        // Update job status to indicate there was an issue starting the process
-        await supabase
-          .from('outline_generation_jobs')
-          .update({ 
-            status: 'error_starting_search',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', job.id);
-          
-        // Add error status for UI
-        await supabase
-          .from('content_plan_outline_statuses')
-          .insert({
-            outline_guid: job.id,
-            status: 'error_initializing_search_process'
+        console.error(`Failed to start ${targetFunction}. Status: ${searchResponse.status}, Error: ${errorText}`);
+
+        // If fast mode failed, optionally retry with slow mode
+        if (fast) {
+          console.log('Fast mode failed, falling back to slow mode');
+          await supabase
+            .from('content_plan_outline_statuses')
+            .insert({
+              outline_guid: job.id,
+              status: 'fast_mode_failed_retrying_slow'
+            });
+
+          // Retry with slow mode
+          const fallbackResponse = await fetch(`${supabaseUrl}/functions/v1/search-outline-content`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${supabaseServiceKey}`
+            },
+            body: JSON.stringify({ job_id: job.id })
           });
-          
-        console.log(`Updated job ${job.id} status to error_starting_search`);
+
+          if (!fallbackResponse.ok) {
+            // Both failed, mark job as error
+            await supabase
+              .from('outline_generation_jobs')
+              .update({
+                status: 'error_starting_search',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', job.id);
+
+            await supabase
+              .from('content_plan_outline_statuses')
+              .insert({
+                outline_guid: job.id,
+                status: 'error_both_fast_and_slow_failed'
+              });
+          } else {
+            await supabase
+              .from('content_plan_outline_statuses')
+              .insert({
+                outline_guid: job.id,
+                status: 'slow_mode_fallback_started'
+              });
+          }
+        } else {
+          // Slow mode failed, mark as error
+          await supabase
+            .from('outline_generation_jobs')
+            .update({
+              status: 'error_starting_search',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', job.id);
+
+          await supabase
+            .from('content_plan_outline_statuses')
+            .insert({
+              outline_guid: job.id,
+              status: 'error_initializing_search_process'
+            });
+        }
+
+        console.log(`Updated job ${job.id} status after error`);
       } else {
         // Add success status for UI
+        const successStatus = fast ? 'fast_search_process_started' : 'search_process_started';
         await supabase
           .from('content_plan_outline_statuses')
           .insert({
             outline_guid: job.id,
-            status: 'search_process_started'
+            status: successStatus
           });
-          
-        console.log(`Successfully started search-outline-content for job_id: ${job.id}`);
+
+        console.log(`Successfully started ${targetFunction} for job_id: ${job.id}`);
       }
     } catch (searchError) {
       console.error(`Error starting search-outline-content: ${searchError.message}`);

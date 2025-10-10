@@ -111,3 +111,6 @@ temp/
 # Local development files
 .local/
 local/
+
+# Claude Code documentation (repository-specific)
+CLAUDE.md
