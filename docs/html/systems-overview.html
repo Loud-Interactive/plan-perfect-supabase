@@ -1,0 +1,1290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Systems Overview Documentation - Loud Interactive Documentation</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+          primaryColor: '#FEDFCE',
+          primaryTextColor: '#3E3E3E',
+          primaryBorderColor: '#FF5900',
+          lineColor: '#FF5900',
+          secondaryColor: '#CEDFFE',
+          tertiaryColor: '#F8FCDA',
+          background: '#FFFFFF',
+          mainBkg: '#FEDFCE',
+          secondBkg: '#CEDFFE',
+          tertiaryBkg: '#F8FCDA',
+          nodeBorder: '#FF5900',
+          clusterBkg: '#FFFFFF',
+          clusterBorder: '#3E3E3E',
+          defaultLinkColor: '#FF5900',
+          titleColor: '#3E3E3E',
+          edgeLabelBackground: '#FFFFFF',
+          actorBorder: '#FF5900',
+          actorBkg: '#FEDFCE',
+          actorTextColor: '#3E3E3E',
+          actorLineColor: '#3E3E3E',
+          signalColor: '#3E3E3E',
+          signalTextColor: '#3E3E3E',
+          labelBoxBkgColor: '#FEDFCE',
+          labelBoxBorderColor: '#FF5900',
+          labelTextColor: '#3E3E3E',
+          loopTextColor: '#3E3E3E',
+          activationBorderColor: '#FF5900',
+          activationBkgColor: '#FEDFCE',
+          sequenceNumberColor: '#FFFFFF'
+        }
+      });
+    </script>
+    <style>
+      @media print {
+        @page {
+          size: A4;
+          margin: 2cm;
+        }
+        body {
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
+        }
+        .no-print {
+          display: none;
+        }
+      }
+    </style>
+</head>
+<body>
+    <div class="doc-header">
+        <h1>Systems Overview Documentation</h1>
+        
+        <div class="doc-meta">
+            Loud Interactive Technical Documentation • Generated 10/10/2025
+        </div>
+    </div>
+
+    <main class="doc-content">
+        <h1>Systems Overview Documentation</h1>
+
+<p>
+This document provides an overview of all major systems in the pp-supabase platform, with detailed documentation available in separate files for complex systems.
+</p>
+
+<h2>Table of Contents</h2>
+
+<ol>
+<li><a href="#planperfect-content-generation-pipeline">PlanPerfect - Content Generation Pipeline</a></li>
+<li><a href="#pageperfect-seo-optimization">PagePerfect - SEO Optimization</a></li>
+<li><a href="#outline-generation-system">Outline Generation System</a></li>
+<li><a href="#gsc-integration-system">GSC Integration System</a></li>
+<li><a href="#keyword-classification-system">Keyword Classification System</a></li>
+<li><a href="#shopify-integration-system">Shopify Integration System</a></li>
+<li><a href="#editperfect-system">EditPerfect System</a></li>
+</ol>
+
+<p>
+---
+</p>
+
+<h2>PlanPerfect - Content Generation Pipeline</h2>
+
+<p>
+<strong>📚 Detailed Documentation</strong>: <a href="./PLANPERFECT-SYSTEM.md">PLANPERFECT-SYSTEM.md</a>
+</p>
+
+<p>
+<strong>Purpose</strong>: AI-powered content generation with multi-stage pipeline.
+</p>
+
+<p>
+<strong>Key Features</strong>:
+</p>
+<ul>
+<li>Multi-stage worker pipeline (Research → Outline → Draft → QA → Export → Complete)</li>
+<li>Queue-based asynchronous processing</li>
+<li>Automatic retry logic</li>
+<li>Granular status tracking</li>
+</ul>
+
+<p>
+<strong>Flow</strong>:
+``<code>
+Client Request → Intake → Queue → Workers → Final Content
+                                  ↓
+                            [Research, Outline, Draft, QA, Export, Complete]
+</code>`<code>
+</p>
+
+<p>
+<strong>Key Functions</strong>:
+</p>
+<ul>
+<li></code>content-intake<code>: Entry point</li>
+<li></code>content-research-worker<code>: Research stage</li>
+<li></code>content-outline-worker<code>: Outline stage</li>
+<li></code>content-draft-worker<code>: Draft generation</li>
+<li></code>content-qa-worker<code>: Quality assurance</li>
+<li></code>content-export-worker<code>: Export formatting</li>
+<li></code>content-complete-worker<code>: Finalization</li>
+</ul>
+
+<p>
+---
+</p>
+
+<h2>PagePerfect - SEO Optimization</h2>
+
+<p>
+<strong>📚 Detailed Documentation</strong>: <a href="./PAGEPERFECT-SYSTEM.md">PAGEPERFECT-SYSTEM.md</a>
+</p>
+
+<p>
+<strong>Purpose</strong>: SEO optimization using GSC data, vector embeddings, and semantic clustering.
+</p>
+
+<p>
+<strong>Key Features</strong>:
+</p>
+<ul>
+<li>GSC data ingestion</li>
+<li>Vector embeddings (OpenAI)</li>
+<li>DBSCAN semantic clustering</li>
+<li>Content gap detection</li>
+<li>Opportunity scoring</li>
+</ul>
+
+<p>
+<strong>Flow</strong>:
+</code>`<code>
+GSC Data → Crawl Page → Segment & Embed → Cluster Keywords → Gap Analysis → Recommendations
+</code>`<code>
+</p>
+
+<p>
+<strong>Key Functions</strong>:
+</p>
+<ul>
+<li></code>ingest-gsc<code>: Fetch GSC data</li>
+<li></code>segment-and-embed-page<code>: Generate embeddings</li>
+<li></code>keyword-clustering<code>: DBSCAN clustering</li>
+<li></code>content-gap-analysis<code>: Find gaps</li>
+<li></code>pageperfect-workflow<code>: Orchestrate all steps</li>
+</ul>
+
+<p>
+<strong>Algorithm Highlights</strong>:
+</code>`<code>
+OpportunityScore = 0.7 <em> PositionScore + 0.3 </em> ImpressionScore
+PositionScore = 1 / (1 + e^(0.5 * (position - 10)))
+ImpressionScore = log10(impressions + 1) / 10
+</code>`<code>
+</p>
+
+<p>
+---
+</p>
+
+<h2>Outline Generation System</h2>
+
+<p>
+<strong>Purpose</strong>: Generate structured content outlines with research from search engines.
+</p>
+
+<h3>Two Modes</h3>
+
+<h4>Slow Mode (Traditional)</h4>
+<p>
+<strong>Time</strong>: 10-20 minutes | <strong>Cost</strong>: ~$0.50-$2.00
+</p>
+
+<pre><code class="language-mermaid">graph LR
+<p>
+    A[generate-outline] --&gt; B[search-outline-content]
+    B --&gt; C[process-search-queue]
+    C --&gt; D[analyze-outline-content]
+    D --&gt; E[Final Outline]</code></pre>
+</p>
+
+<p>
+<strong>Process</strong>:
+</p>
+<ol>
+<li><strong>search-outline-content</strong>: Claude generates search terms</li>
+<li><strong>process-search-queue</strong>: Jina.ai batch searches</li>
+<li><strong>analyze-outline-content</strong>: Claude Extended Thinking analyzes & generates outline</li>
+</ol>
+
+<p>
+<strong>Key Features</strong>:
+</p>
+<ul>
+<li>Battle-tested reliability</li>
+<li>Claude Extended Thinking (23K budget_tokens)</li>
+<li>Jina.ai search for authoritative sources</li>
+<li>5-6 sections with intro/conclusion</li>
+<li>Detailed URL analysis</li>
+</ul>
+
+<h4>Fast Mode (New)</h4>
+<p>
+<strong>Time</strong>: 2-5 minutes | <strong>Cost</strong>: ~$0.10-$0.30
+</p>
+
+<p>
+<strong>📚 Detailed Documentation</strong>: <a href="../supabase/functions/README-FAST-MODE-OUTLINE.md">README-FAST-MODE-OUTLINE.md</a>
+</p>
+
+<pre><code class="language-mermaid">graph LR
+<p>
+    A[generate-outline fast:true] --&gt; B[fast-outline-search]
+    B --&gt; C[fast-analyze-outline-content]
+    C --&gt; D[Final Outline]</code></pre>
+</p>
+
+<p>
+<strong>Process</strong>:
+</p>
+<ol>
+<li><strong>fast-outline-search</strong>: Single Groq API call with browser_search tool</li>
+</ol>
+<p>
+   - Autonomous search strategy
+   - Extracts markdown, headings, quotes
+   - Brand-aware search
+</p>
+
+<ol>
+<li><strong>fast-analyze-outline-content</strong>: Groq outline generation</li>
+</ol>
+<p>
+   - Uses gpt-oss-120b model
+   - Fetches content_plan data
+   - Respects brand restrictions
+   - 4-5 sections, no intro/conclusion
+</p>
+
+<p>
+<strong>Key Code - Fast Mode Enable</strong>:
+</p>
+<pre><code class="language-typescript">const { data } = await supabase.functions.invoke(&#039;generate-outline&#039;, {
+<p>
+  body: {
+    post_title: &quot;Best Protein Shakes for Muscle Building&quot;,
+    post_keyword: &quot;best protein shakes muscle building&quot;,
+    content_plan_keyword: &quot;protein shakes&quot;,
+    domain: &quot;centr.com&quot;,
+    fast: true  // ⚡ Enable fast mode
+  }
+})</code></pre>
+</p>
+
+<p>
+<strong>Comparison</strong>:
+</p>
+
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Slow Mode</th>
+<th>Fast Mode</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Time</strong></td>
+<td>10-20 min</td>
+<td>2-5 min</td>
+</tr>
+<tr>
+<td><strong>API Calls</strong></td>
+<td>15-20 (Jina + Claude)</td>
+<td>2 (Groq)</td>
+</tr>
+<tr>
+<td><strong>Search Strategy</strong></td>
+<td>Fixed terms</td>
+<td>Adaptive</td>
+</tr>
+<tr>
+<td><strong>Data Quality</strong></td>
+<td>Text only</td>
+<td>Markdown + headings + quotes</td>
+</tr>
+<tr>
+<td><strong>Brand Awareness</strong></td>
+<td>Limited</td>
+<td>Full profile</td>
+</tr>
+<tr>
+<td><strong>Cost</strong></td>
+<td>~$0.50-$2.00</td>
+<td>~$0.10-$0.30</td>
+</tr>
+<tr>
+<td><strong>Outline Structure</strong></td>
+<td>5-6 sections + intro/conclusion</td>
+<td>4-5 sections, focused</td>
+</tr>
+</tbody>
+</table>
+<p>
+<strong>Flow Chart - Fast Mode</strong>:
+</code>`<code>
+┌─────────────────────┐
+│  generate-outline   │
+│   fast: true        │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ fast-outline-search │
+│  - Fetch brand      │
+│  - Groq browser     │
+│    search tool      │
+│  - Extract rich     │
+│    data             │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│fast-analyze-outline │
+│  - Fetch content    │
+│    plan data        │
+│  - Load brand       │
+│    profile          │
+│  - Groq generate    │
+│    outline          │
+│  - 4-5 sections     │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│   Final Outline     │
+│  - Saved to DB      │
+│  - Status: complete │
+└─────────────────────┘
+</code>`<code>
+</p>
+
+<p>
+<strong>Database Schema</strong>:
+</p>
+<pre><code class="language-sql">-- Outline generation jobs
+<p>
+CREATE TABLE outline_generation_jobs (
+  id UUID PRIMARY KEY,
+  content_plan_guid UUID,
+  post_title TEXT,
+  post_keyword TEXT,
+  content_plan_keyword TEXT,
+  domain TEXT,
+  fast_mode BOOLEAN DEFAULT FALSE,  -- NEW
+  status TEXT,
+  created_at TIMESTAMPTZ
+);
+</p>
+
+<p>
+-- Search results
+CREATE TABLE outline_search_results (
+  id UUID PRIMARY KEY,
+  job_id UUID REFERENCES outline_generation_jobs(id),
+  search_term TEXT,
+  search_category TEXT,  -- &#039;fast&#039;, &#039;base&#039;, &#039;combined&#039;, etc.
+  url TEXT,
+  title TEXT,
+  description TEXT,
+  content TEXT,
+  headings_array JSONB,  -- NEW: Array of heading strings
+  quotes_array JSONB     -- NEW: Array of {text, citation}
+);
+</p>
+
+<p>
+-- Status tracking
+CREATE TABLE content_plan_outline_statuses (
+  id UUID PRIMARY KEY,
+  outline_guid UUID,
+  status TEXT,
+  created_at TIMESTAMPTZ
+);</code></pre>
+</p>
+
+<p>
+<strong>Key Functions</strong>:
+</p>
+<ul>
+<li></code>generate-outline/index.ts<code>: Router (slow vs fast)</li>
+<li><strong>Slow Mode</strong>:</li>
+</ul>
+<p>
+  - </code>search-outline-content/index.ts<code>: Generate search terms & execute
+  - </code>process-search-queue/index.ts<code>: Batch process searches
+  - </code>analyze-outline-content/index.ts<code>: Claude analysis & outline
+</p>
+<ul>
+<li><strong>Fast Mode</strong>:</li>
+</ul>
+<p>
+  - </code>fast-outline-search/index.ts<code>: Groq browser search
+  - </code>fast-analyze-outline-content/index.ts<code>: Groq outline generation
+</p>
+
+<p>
+---
+</p>
+
+<h2>GSC Integration System</h2>
+
+<p>
+<strong>Purpose</strong>: Interact with Google Search Console API for indexing and inspection.
+</p>
+
+<h3>Key Functions</h3>
+
+<h4>ingest-gsc</h4>
+<p>
+<strong>Detailed in</strong>: <a href="./PAGEPERFECT-SYSTEM.md">PAGEPERFECT-SYSTEM.md</a>
+</p>
+
+<p>
+Fetches GSC data for SEO analysis (covered in PagePerfect).
+</p>
+
+<h4>gsc-indexing</h4>
+<p>
+<strong>Purpose</strong>: Submit URLs to Google's Indexing API for faster crawling.
+</p>
+
+<p>
+<strong>Key Features</strong>:
+</p>
+<ul>
+<li>Google Indexing API integration</li>
+<li>Service account authentication</li>
+<li>Batch URL submission</li>
+<li>Status tracking (indexed, not indexed, error)</li>
+<li>Rate limit handling (200 URLs/day)</li>
+</ul>
+
+<p>
+<strong>Flow</strong>:
+</code>`<code>
+┌──────────────┐
+│ Submit URLs  │
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│  Get Service │
+│  Account JWT │
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│  Call Google │
+│  Indexing API│
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│  Store Status│
+│  in Database │
+└──────────────┘
+</code>`<code>
+</p>
+
+<p>
+<strong>Key Code</strong>:
+</p>
+<pre><code class="language-typescript">// Request indexing for URL
+<p>
+const response = await fetch(
+  &#039;https://indexing.googleapis.com/v3/urlNotifications:publish&#039;,
+  {
+    method: &#039;POST&#039;,
+    headers: {
+      &#039;Content-Type&#039;: &#039;application/json&#039;,
+      &#039;Authorization&#039;: </code>Bearer ${accessToken}<code>
+    },
+    body: JSON.stringify({
+      url: url,
+      type: &#039;URL_UPDATED&#039;  // or &#039;URL_DELETED&#039;
+    })
+  }
+)</code></pre>
+</p>
+
+<p>
+<strong>Rate Limits</strong>:
+</p>
+<ul>
+<li>200 URLs per day (per service account)</li>
+<li>Additional URLs via quota increase request</li>
+</ul>
+
+<p>
+---
+</p>
+
+<h2>Keyword Classification System</h2>
+
+<p>
+<strong>Purpose</strong>: Automatically classify keywords using AI (DeepSeek).
+</p>
+
+<h3>Key Function: classify-keyword</h3>
+
+<p>
+<strong>Flow</strong>:
+</code>`<code>
+┌──────────────────┐
+│   Get Keyword    │
+│   & Context      │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Call DeepSeek   │
+│  API with prompt │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ Parse Categories │
+│ & Confidence     │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Store Results   │
+│  in Database     │
+└──────────────────┘
+</code>`<code>
+</p>
+
+<p>
+<strong>Example Classification</strong>:
+</p>
+<pre><code class="language-json">{
+<p>
+  &quot;keyword&quot;: &quot;best protein powder&quot;,
+  &quot;classifications&quot;: [
+    {
+      &quot;category&quot;: &quot;Product Comparison&quot;,
+      &quot;confidence&quot;: 0.9
+    },
+    {
+      &quot;category&quot;: &quot;Buying Intent&quot;,
+      &quot;confidence&quot;: 0.85
+    }
+  ]
+}</code></pre>
+</p>
+
+<p>
+<strong>Use Cases</strong>:
+</p>
+<ul>
+<li>Content planning (group by intent)</li>
+<li>SEO strategy (transactional vs informational)</li>
+<li>Keyword clustering enhancement</li>
+</ul>
+
+<p>
+<strong>Key Code</strong>:
+</p>
+<pre><code class="language-typescript">const response = await fetch(&#039;https://api.deepseek.com/v1/chat/completions&#039;, {
+<p>
+  method: &#039;POST&#039;,
+  headers: {
+    &#039;Authorization&#039;: </code>Bearer ${DEEPSEEK_API_KEY}<code>,
+    &#039;Content-Type&#039;: &#039;application/json&#039;
+  },
+  body: JSON.stringify({
+    model: &#039;deepseek-chat&#039;,
+    messages: [{
+      role: &#039;user&#039;,
+      content: </code>Classify this keyword: &quot;${keyword}&quot;\n\nContext: ${context}\n\nProvide categories and confidence scores.<code>
+    }]
+  })
+})</code></pre>
+</p>
+
+<p>
+---
+</p>
+
+<h2>Shopify Integration System</h2>
+
+<p>
+<strong>Purpose</strong>: Automated blog publishing and schema markup for Shopify stores.
+</p>
+
+<h3>Key Functions</h3>
+
+<h4>generate-schema-and-update-shopify</h4>
+
+<p>
+<strong>Purpose</strong>: Generate schema markup and publish content to Shopify blog.
+</p>
+
+<p>
+<strong>Flow</strong>:
+</code>`<code>
+┌──────────────────┐
+│ Get Content Data │
+│  - Title         │
+│  - Body          │
+│  - Meta          │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Generate Schema │
+│  - Article       │
+│  - FAQPage       │
+│  - BreadcrumbList│
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Shopify Admin   │
+│  API Call        │
+│  - Create/Update │
+│    Blog Post     │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Inject Schema   │
+│  in Post Body    │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│   Return URL     │
+└──────────────────┘
+</code>`<code>
+</p>
+
+<p>
+<strong>Key Features</strong>:
+</p>
+<ul>
+<li>Shopify Admin API integration</li>
+<li>Automatic schema generation (JSON-LD)</li>
+<li>Blog post creation/update</li>
+<li>Image upload support</li>
+<li>Tag management</li>
+<li>SEO metadata</li>
+</ul>
+
+<p>
+<strong>Schema Types Generated</strong>:
+</p>
+<pre><code class="language-json">{
+<p>
+  &quot;@context&quot;: &quot;https://schema.org&quot;,
+  &quot;@graph&quot;: [
+    {
+      &quot;@type&quot;: &quot;Article&quot;,
+      &quot;headline&quot;: &quot;Post Title&quot;,
+      &quot;author&quot;: {
+        &quot;@type&quot;: &quot;Person&quot;,
+        &quot;name&quot;: &quot;Author Name&quot;
+      },
+      &quot;datePublished&quot;: &quot;2025-01-01T00:00:00Z&quot;
+    },
+    {
+      &quot;@type&quot;: &quot;FAQPage&quot;,
+      &quot;mainEntity&quot;: [...]
+    },
+    {
+      &quot;@type&quot;: &quot;BreadcrumbList&quot;,
+      &quot;itemListElement&quot;: [...]
+    }
+  ]
+}</code></pre>
+</p>
+
+<p>
+<strong>Key Code</strong>:
+</p>
+<pre><code class="language-typescript">// Create Shopify blog post
+<p>
+const response = await fetch(
+  </code>https://${shopDomain}/admin/api/2024-01/blogs/${blogId}/articles.json<code>,
+  {
+    method: &#039;POST&#039;,
+    headers: {
+      &#039;X-Shopify-Access-Token&#039;: accessToken,
+      &#039;Content-Type&#039;: &#039;application/json&#039;
+    },
+    body: JSON.stringify({
+      article: {
+        title,
+        body_html: bodyWithSchema,  // Includes &lt;script type=&quot;application/ld+json&quot;&gt;
+        author: authorName,
+        tags: tags.join(&#039;, &#039;),
+        published_at: new Date().toISOString()
+      }
+    })
+  }
+)</code></pre>
+</p>
+
+<h4>get-shopify-status</h4>
+
+<p>
+<strong>Purpose</strong>: Check publication status of content on Shopify.
+</p>
+
+<p>
+<strong>Returns</strong>:
+</p>
+<ul>
+<li>Published URL</li>
+<li>Publication date</li>
+<li>Current status (draft, published)</li>
+<li>View count (if available)</li>
+</ul>
+
+<p>
+---
+</p>
+
+<h2>EditPerfect System</h2>
+
+<p>
+<strong>Purpose</strong>: Content editing and transformation with style guide enforcement.
+</p>
+
+<h3>Key Functions</h3>
+
+<h4>generate-edit-job</h4>
+
+<p>
+<strong>Purpose</strong>: Create content editing job with specific requirements.
+</p>
+
+<p>
+<strong>Flow</strong>:
+</code>`<code>
+┌──────────────────┐
+│  Submit Content  │
+│  & Instructions  │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│   Create Job     │
+│   in Database    │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Load Style      │
+│  Guide (if any)  │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│   AI Analysis    │
+│   & Editing      │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│ Generate Edits   │
+│  - Add           │
+│  - Remove        │
+│  - Modify        │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│   Return Job ID  │
+└──────────────────┘
+</code>`<code>
+</p>
+
+<p>
+<strong>Edit Types</strong>:
+</p>
+<pre><code class="language-typescript">interface ContentEdit {
+<p>
+  type: &#039;add&#039; | &#039;remove&#039; | &#039;modify&#039;
+  location: {
+    paragraph?: number
+    sentence?: number
+    position?: number
+  }
+  original?: string
+  new?: string
+  reason: string
+}</code></pre>
+</p>
+
+<h4>apply-content-edits</h4>
+
+<p>
+<strong>Purpose</strong>: Apply generated edits to content.
+</p>
+
+<p>
+<strong>Features</strong>:
+</p>
+<ul>
+<li>Tracks edit application</li>
+<li>Maintains edit history</li>
+<li>Supports selective application</li>
+<li>Generates diff view</li>
+</ul>
+
+<p>
+<strong>Key Code</strong>:
+</p>
+<pre><code class="language-typescript">// Apply edits to content
+<p>
+function applyEdits(content: string, edits: ContentEdit[]): string {
+  let result = content
+</p>
+
+<p>
+  // Sort edits by position (reverse order to maintain positions)
+  const sortedEdits = edits.sort((a, b) =&gt;
+    (b.location.position || 0) - (a.location.position || 0)
+  )
+</p>
+
+<p>
+  for (const edit of sortedEdits) {
+    switch (edit.type) {
+      case &#039;add&#039;:
+        result = insertAt(result, edit.location.position, edit.new)
+        break
+      case &#039;remove&#039;:
+        result = removeAt(result, edit.location.position, edit.original.length)
+        break
+      case &#039;modify&#039;:
+        result = replaceAt(result, edit.location.position, edit.original, edit.new)
+        break
+    }
+  }
+</p>
+
+<p>
+  return result
+}</code></pre>
+</p>
+
+<h4>get-content-edits</h4>
+
+<p>
+<strong>Purpose</strong>: Retrieve edits for a specific job.
+</p>
+
+<p>
+<strong>Returns</strong>:
+</p>
+<pre><code class="language-json">{
+<p>
+  &quot;job_id&quot;: &quot;uuid&quot;,
+  &quot;status&quot;: &quot;completed&quot;,
+  &quot;edits&quot;: [
+    {
+      &quot;type&quot;: &quot;modify&quot;,
+      &quot;location&quot;: { &quot;paragraph&quot;: 1, &quot;sentence&quot;: 2 },
+      &quot;original&quot;: &quot;This sentence needs improvement.&quot;,
+      &quot;new&quot;: &quot;This sentence has been improved for clarity.&quot;,
+      &quot;reason&quot;: &quot;Clarity improvement&quot;
+    }
+  ],
+  &quot;style_guide_compliance&quot;: {
+    &quot;score&quot;: 0.92,
+    &quot;violations&quot;: []
+  }
+}</code></pre>
+</p>
+
+<p>
+---
+</p>
+
+<h2>System Integration</h2>
+
+<h3>How Systems Work Together</h3>
+
+<pre><code class="language-mermaid">graph TD
+<p>
+    A[Content Request] --&gt; B{System Type}
+    B --&gt;|Generate| C[PlanPerfect Pipeline]
+    B --&gt;|Optimize| D[PagePerfect Analysis]
+    B --&gt;|Edit| E[EditPerfect Job]
+</p>
+
+<p>
+    C --&gt; F[Outline Generation]
+    F --&gt; G{Fast or Slow?}
+    G --&gt;|Fast| H[Groq Pipeline]
+    G --&gt;|Slow| I[Claude Pipeline]
+</p>
+
+<p>
+    D --&gt; J[GSC Data Ingest]
+    J --&gt; K[Embedding &amp; Clustering]
+    K --&gt; L[Gap Analysis]
+</p>
+
+<p>
+    E --&gt; M[AI Editing]
+    M --&gt; N[Apply Edits]
+</p>
+
+<p>
+    H --&gt; O[Final Content]
+    I --&gt; O
+    N --&gt; O
+    C --&gt; O
+</p>
+
+<p>
+    O --&gt; P[Publish]
+    P --&gt; Q[Shopify Integration]
+    P --&gt; R[GSC Indexing]</code></pre>
+</p>
+
+<h3>Common Workflows</h3>
+
+<p>
+<strong>1. Create New Content</strong>:
+</code>`<code>
+PlanPerfect Intake → Research → Outline (Fast Mode) → Draft → QA → Export → Shopify Publish → GSC Index
+</code>`<code>
+</p>
+
+<p>
+<strong>2. Optimize Existing Content</strong>:
+</code>`<code>
+PagePerfect Workflow → GSC Ingest → Crawl → Embed → Cluster → Gap Analysis → EditPerfect → Apply Edits → Republish
+</code>`<code>
+</p>
+
+<p>
+<strong>3. Keyword Strategy</strong>:
+</code>`<code>
+GSC Ingest → Keyword Classification → Clustering → Opportunity Scoring → PlanPerfect Content Creation
+</code>`<code>
+</p>
+
+<p>
+---
+</p>
+
+<h2>Configuration Reference</h2>
+
+<h3>Environment Variables Summary</h3>
+
+<pre><code class="language-bash">&lt;h1&gt;AI APIs&lt;/h1&gt;
+<p>
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+GROQ_API_KEY=gsk_...
+DEEPSEEK_API_KEY=sk-...
+</p>
+
+<p>
+&lt;h1&gt;GSC&lt;/h1&gt;
+GSC_CREDENTIALS={&quot;private_key&quot;:&quot;...&quot;,&quot;client_email&quot;:&quot;...&quot;}
+GSC_API_TOKEN=ya29....  # Alternative to service account
+</p>
+
+<p>
+&lt;h1&gt;Web Scraping&lt;/h1&gt;
+SCRAPER_API_KEY=...
+</p>
+
+<p>
+&lt;h1&gt;Shopify&lt;/h1&gt;
+SHOPIFY_ACCESS_TOKEN=shpat_...
+SHOPIFY_SHOP_DOMAIN=mystore.myshopify.com
+</p>
+
+<p>
+&lt;h1&gt;Supabase (auto-set)&lt;/h1&gt;
+SUPABASE_URL=https://project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+SUPABASE_ANON_KEY=eyJ...
+</p>
+
+<p>
+&lt;h1&gt;Worker Configuration&lt;/h1&gt;
+CONTENT_QUEUE_VISIBILITY=600
+CONTENT_STAGE_MAX_ATTEMPTS=3</code></pre>
+</p>
+
+<h3>Key Database Tables</h3>
+
+<table>
+<thead>
+<tr>
+<th>Table</th>
+<th>Purpose</th>
+<th>System</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></code>content_jobs<code></td>
+<td>Job tracking</td>
+<td>PlanPerfect</td>
+</tr>
+<tr>
+<td></code>content_payloads<code></td>
+<td>Stage results</td>
+<td>PlanPerfect</td>
+</tr>
+<tr>
+<td></code>outline_generation_jobs<code></td>
+<td>Outline jobs</td>
+<td>Outline Generation</td>
+</tr>
+<tr>
+<td></code>outline_search_results<code></td>
+<td>Search results</td>
+<td>Outline Generation</td>
+</tr>
+<tr>
+<td></code>gsc_page_query<code></td>
+<td>GSC data</td>
+<td>PagePerfect, GSC</td>
+</tr>
+<tr>
+<td></code>pages<code></td>
+<td>Page HTML</td>
+<td>PagePerfect</td>
+</tr>
+<tr>
+<td></code>page_embeddings<code></td>
+<td>Vector embeddings</td>
+<td>PagePerfect</td>
+</tr>
+<tr>
+<td></code>gsc_keywords<code></td>
+<td>Keywords with embeddings</td>
+<td>PagePerfect</td>
+</tr>
+<tr>
+<td></code>keyword_clusters<code></td>
+<td>DBSCAN clusters</td>
+<td>PagePerfect</td>
+</tr>
+<tr>
+<td></code>crawl_jobs<code></td>
+<td>Crawl status</td>
+<td>PagePerfect</td>
+</tr>
+<tr>
+<td></code>edit_jobs<code></td>
+<td>Edit tracking</td>
+<td>EditPerfect</td>
+</tr>
+<tr>
+<td></code>shopify_publications`</td>
+<td>Publish status</td>
+<td>Shopify Integration</td>
+</tr>
+</tbody>
+</table>
+<p>
+---
+</p>
+
+<h2>Performance Benchmarks</h2>
+
+<h3>Outline Generation</h3>
+
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Avg Time</th>
+<th>Cost</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Slow</td>
+<td>10-20 min</td>
+<td>$0.50-$2.00</td>
+<td>Mission-critical content, max quality</td>
+</tr>
+<tr>
+<td>Fast</td>
+<td>2-5 min</td>
+<td>$0.10-$0.30</td>
+<td>High-volume content, good quality</td>
+</tr>
+</tbody>
+</table>
+<h3>PagePerfect Workflow</h3>
+
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Avg Time</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Crawl</td>
+<td>10-30 sec</td>
+<td>Depends on page size</td>
+</tr>
+<tr>
+<td>Embed</td>
+<td>30-90 sec</td>
+<td>~100 paragraphs</td>
+</tr>
+<tr>
+<td>Cluster</td>
+<td>5-15 sec</td>
+<td>~500 keywords</td>
+</tr>
+<tr>
+<td>Analyze</td>
+<td>10-30 sec</td>
+<td>Similarity calculations</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>1-3 min</strong></td>
+<td>Cached for 24 hours</td>
+</tr>
+</tbody>
+</table>
+<h3>PlanPerfect Pipeline</h3>
+
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Avg Time</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Research</td>
+<td>1-3 min</td>
+<td>API calls, web scraping</td>
+</tr>
+<tr>
+<td>Outline</td>
+<td>2-5 min</td>
+<td>Fast mode, or 10-20 min slow</td>
+</tr>
+<tr>
+<td>Draft</td>
+<td>5-10 min</td>
+<td>Full content generation</td>
+</tr>
+<tr>
+<td>QA</td>
+<td>1-2 min</td>
+<td>Quality checks</td>
+</tr>
+<tr>
+<td>Export</td>
+<td>30 sec</td>
+<td>Formatting</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>10-20 min</strong></td>
+<td>Fast mode: 8-12 min</td>
+</tr>
+</tbody>
+</table>
+<p>
+---
+</p>
+
+<h2>Deployment Scripts</h2>
+
+<h3>Fast Mode Outline</h3>
+
+<pre><code class="language-bash">./deploy-fast-mode.sh
+
+<p>
+&lt;h1&gt;Or manual:&lt;/h1&gt;
+supabase functions deploy generate-outline --project-ref jsypctdhynsdqrfifvdh
+supabase functions deploy fast-outline-search --project-ref jsypctdhynsdqrfifvdh
+supabase functions deploy fast-analyze-outline-content --project-ref jsypctdhynsdqrfifvdh</code></pre>
+</p>
+
+<h3>Full System</h3>
+
+<pre><code class="language-bash">&lt;h1&gt;Deploy all functions&lt;/h1&gt;
+<p>
+supabase functions deploy --project-ref jsypctdhynsdqrfifvdh
+</p>
+
+<p>
+&lt;h1&gt;Deploy specific system&lt;/h1&gt;
+supabase functions deploy pageperfect-workflow --project-ref jsypctdhynsdqrfifvdh
+supabase functions deploy content-intake --project-ref jsypctdhynsdqrfifvdh</code></pre>
+</p>
+
+<p>
+---
+</p>
+
+<h2>Further Reading</h2>
+
+<ul>
+<li><strong>Detailed System Docs</strong>:</li>
+</ul>
+<p>
+  - <a href="./PLANPERFECT-SYSTEM.md">PlanPerfect System</a>
+  - <a href="./PAGEPERFECT-SYSTEM.md">PagePerfect System</a>
+  - <a href="../supabase/functions/README-FAST-MODE-OUTLINE.md">Fast Mode Outline</a>
+  - <a href="../supabase/functions/README-OUTLINE-GENERATION.md">Outline Generation (Legacy)</a>
+</p>
+
+<ul>
+<li><strong>API References</strong>:</li>
+</ul>
+<p>
+  - <a href="https://supabase.com/docs/guides/functions">Supabase Edge Functions</a>
+  - <a href="https://platform.openai.com/docs/guides/embeddings">OpenAI Embeddings</a>
+  - <a href="https://developers.google.com/webmaster-tools/v1/searchanalytics/query">Google Search Console API</a>
+  - <a href="https://shopify.dev/docs/api/admin-rest">Shopify Admin API</a>
+</p>
+
+<ul>
+<li><strong>Deployment Guides</strong>:</li>
+</ul>
+<p>
+  - <a href="../supabase/functions/MASTER_DEPLOYMENT.md">Master Deployment</a>
+  - <a href="../supabase/functions/PP_DEPLOYMENT.md">PP Deployment</a>
+</p>
+
+    </main>
+
+    <footer class="doc-footer">
+        <p>© 2025 Loud Interactive. All rights reserved.</p>
+        <p class="text-muted">For questions or support, contact: <a href="mailto:support@loud.us">support@loud.us</a></p>
+    </footer>
+</body>
+</html>

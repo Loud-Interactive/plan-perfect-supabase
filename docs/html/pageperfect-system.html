@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PagePerfect System Documentation - Loud Interactive Documentation</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+          primaryColor: '#FEDFCE',
+          primaryTextColor: '#3E3E3E',
+          primaryBorderColor: '#FF5900',
+          lineColor: '#FF5900',
+          secondaryColor: '#CEDFFE',
+          tertiaryColor: '#F8FCDA',
+          background: '#FFFFFF',
+          mainBkg: '#FEDFCE',
+          secondBkg: '#CEDFFE',
+          tertiaryBkg: '#F8FCDA',
+          nodeBorder: '#FF5900',
+          clusterBkg: '#FFFFFF',
+          clusterBorder: '#3E3E3E',
+          defaultLinkColor: '#FF5900',
+          titleColor: '#3E3E3E',
+          edgeLabelBackground: '#FFFFFF',
+          actorBorder: '#FF5900',
+          actorBkg: '#FEDFCE',
+          actorTextColor: '#3E3E3E',
+          actorLineColor: '#3E3E3E',
+          signalColor: '#3E3E3E',
+          signalTextColor: '#3E3E3E',
+          labelBoxBkgColor: '#FEDFCE',
+          labelBoxBorderColor: '#FF5900',
+          labelTextColor: '#3E3E3E',
+          loopTextColor: '#3E3E3E',
+          activationBorderColor: '#FF5900',
+          activationBkgColor: '#FEDFCE',
+          sequenceNumberColor: '#FFFFFF'
+        }
+      });
+    </script>
+    <style>
+      @media print {
+        @page {
+          size: A4;
+          margin: 2cm;
+        }
+        body {
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
+        }
+        .no-print {
+          display: none;
+        }
+      }
+    </style>
+</head>
+<body>
+    <div class="doc-header">
+        <h1>PagePerfect System Documentation</h1>
+        <div class="doc-subtitle">Comprehensive technical documentation for the pp-supabase platform</div>
+        <div class="doc-meta">
+            Loud Interactive Technical Documentation • Generated 10/10/2025
+        </div>
+    </div>
+
+    <main class="doc-content">
+        <h1>PagePerfect System Documentation</h1>
+
+<h2>Overview</h2>
+
+<p>
+PagePerfect is an AI-powered SEO optimization system that analyzes your content against Google Search Console (GSC) data to identify content gaps and optimization opportunities. It uses vector embeddings, semantic clustering, and intelligent analysis to help you rank higher for relevant keywords.
+</p>
+
+<p>
+<strong>Key Capabilities</strong>:
+</p>
+<ul>
+<li>📊 GSC data ingestion with advanced filtering</li>
+<li>🧮 Vector embeddings for content and keywords</li>
+<li>🎯 DBSCAN semantic clustering</li>
+<li>🔍 Content gap detection</li>
+<li>📈 Opportunity scoring algorithm</li>
+<li>🔄 Orchestrated workflow system</li>
+<li>⏱️ Scheduled batch processing via cron</li>
+</ul>
+
+<h2>Architecture Overview</h2>
+
+<h3>High-Level Flow</h3>
+
+<pre><code class="language-mermaid">graph TD
+<p>
+    A[GSC Data] --&gt;|ingest-gsc| B[(gsc_page_query table)]
+    B --&gt;|pageperfect-workflow| C[Crawl Page HTML]
+    C --&gt;|submit-crawl-job| D[(crawl_jobs table)]
+    D --&gt;|Crawl Complete| E[Segment &amp; Embed]
+    E --&gt;|OpenAI Embeddings| F[(page_embeddings table)]
+    F --&gt;|Cluster Keywords| G[DBSCAN Clustering]
+    G --&gt;|Clusters| H[(keyword_clusters table)]
+    H --&gt;|Gap Analysis| I[Content Gap Detection]
+    I --&gt;|Recommendations| J[(rewrite_recommendations table)]</code></pre>
+</p>
+
+<h3>System Components</h3>
+
+<ol>
+<li><strong>GSC Ingestion</strong> (<code>ingest-gsc</code>)</li>
+</ol>
+<p>
+   - Fetches data from Google Search Console API
+   - Filters by position, impressions, clicks
+   - Stores page-keyword pairs with metrics
+   - Handles pagination and rate limiting
+</p>
+
+<ol>
+<li><strong>Page Crawling</strong> (<code>submit-crawl-job</code>, <code>fetch-crawl-data</code>)</li>
+</ol>
+<p>
+   - Uses ScraperAPI for reliable HTML fetching
+   - Stores full HTML content
+   - Tracks crawl status and timestamps
+   - Supports premium/ultra-premium proxies
+</p>
+
+<ol>
+<li><strong>Content Segmentation</strong> (<code>segment-and-embed-page</code>)</li>
+</ol>
+<p>
+   - Parses HTML with Cheerio
+   - Extracts paragraphs and headings
+   - Generates OpenAI embeddings (text-embedding-ada-002)
+   - Stores paragraph-level embeddings
+</p>
+
+<ol>
+<li><strong>Keyword Clustering</strong> (<code>keyword-clustering</code>)</li>
+</ol>
+<p>
+   - Generates embeddings for keywords
+   - Applies DBSCAN algorithm for semantic grouping
+   - Calculates cluster statistics
+   - Identifies cluster representatives
+</p>
+
+<ol>
+<li><strong>Content Gap Analysis</strong> (<code>content-gap-analysis</code>)</li>
+</ol>
+<p>
+   - Compares keyword clusters to page content
+   - Calculates cosine similarity
+   - Identifies missing topics (gaps)
+   - Scores opportunities by impressions and position
+</p>
+
+<ol>
+<li><strong>Workflow Orchestration</strong> (<code>pageperfect-workflow</code>)</li>
+</ol>
+<p>
+   - Chains all steps in sequence
+   - Checks dependencies
+   - Tracks execution status
+   - Implements smart caching
+</p>
+
+<ol>
+<li><strong>Batch Processing</strong> (<code>pageperfect-batch-processor</code>, cron functions)</li>
+</ol>
+<p>
+   - Scheduled GSC data ingestion
+   - Automatic CTR recalibration
+   - URL queue processing
+   - Batch operations
+</p>
+
+<h2>Detailed Workflow</h2>
+
+<h3>Step 1: GSC Data Ingestion</h3>
+
+<p>
+<strong>Function</strong>: <code>ingest-gsc/index.ts</code>
+</p>
+
+<p>
+<strong>Purpose</strong>: Fetch keyword and performance data from Google Search Console.
+</p>
+
+<pre><code class="language-typescript">// Request format
+<p>
+{
+  &quot;siteUrl&quot;: &quot;https://example.com&quot; | &quot;sc-domain:example.com&quot;,
+  &quot;startDate&quot;: &quot;2025-01-01&quot;,
+  &quot;endDate&quot;: &quot;2025-01-31&quot;,
+  &quot;rowLimit&quot;: 50000,
+  &quot;startRow&quot;: 0,
+  &quot;gscCredentials&quot;: {
+    &quot;private_key&quot;: &quot;...&quot;,
+    &quot;client_email&quot;: &quot;service-account@project.iam.gserviceaccount.com&quot;
+  },
+  &quot;filters&quot;: {
+    &quot;minPosition&quot;: 5,
+    &quot;maxPosition&quot;: 50,
+    &quot;minImpressions&quot;: 10,
+    &quot;maxKeywordsPerUrl&quot;: 100,
+    &quot;keywordsSortBy&quot;: &quot;impressions&quot;,  // &quot;impressions&quot;, &quot;clicks&quot;, &quot;position&quot;
+    &quot;specificUrls&quot;: [&quot;https://example.com/page1&quot;, &quot;https://example.com/page2&quot;]
+  }
+}
+</p>
+
+<p>
+// Response format
+{
+  &quot;success&quot;: true,
+  &quot;message&quot;: &quot;GSC data ingested successfully&quot;,
+  &quot;rowsProcessed&quot;: 1234,
+  &quot;date&quot;: &quot;2025-01-01&quot;,
+  &quot;rowsFetched&quot;: 1500,
+  &quot;siteUrl&quot;: &quot;https://example.com&quot;,
+  &quot;service_account&quot;: &quot;service-account@project.iam.gserviceaccount.com&quot;
+}</code></pre>
+</p>
+
+<p>
+<strong>Key Features</strong>:
+</p>
+<ul>
+<li><strong>Authentication</strong>: Service account JWT, OAuth token, or direct API token</li>
+<li><strong>Pagination</strong>: Automatic handling of 25K row API limit</li>
+<li><strong>Retry Logic</strong>: Exponential backoff for rate limits (429) and 5xx errors</li>
+<li><strong>Token Caching</strong>: In-memory cache for service account tokens (55min TTL)</li>
+<li><strong>Filtering</strong>: Position, impressions, clicks, specific URLs</li>
+<li><strong>Site Verification</strong>: Checks available GSC properties and access levels</li>
+</ul>
+
+<p>
+<strong>Key Code</strong>:
+</p>
+<pre><code class="language-typescript">// JWT token generation with caching
+<p>
+async function getGoogleToken(credentials: any): Promise&lt;string&gt; {
+  // Check cache first
+  if (credentials.client_email) {
+    const cacheKey = credentials.client_email
+    const cachedToken = tokenCache[cacheKey]
+    const now = Math.floor(Date.now() / 1000)
+</p>
+
+<p>
+    if (cachedToken &amp;&amp; cachedToken.expires &gt; now + 300) {
+      return cachedToken.token
+    }
+  }
+</p>
+
+<p>
+  // Generate new JWT
+  const token = await getGoogleAccessToken(credentials)
+</p>
+
+<p>
+  // Cache for 55 minutes
+  tokenCache[cacheKey] = {
+    token,
+    expires: Math.floor(Date.now() / 1000) + 3300
+  }
+</p>
+
+<p>
+  return token
+}
+</p>
+
+<p>
+// Fetch with retry logic
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise&lt;Response&gt; {
+  let retries = 0
+</p>
+
+<p>
+  while (retries &lt;= maxRetries) {
+    const response = await fetch(url, options)
+</p>
+
+<p>
+    // Retry on 429 or 5xx with exponential backoff
+    if (response.status === 429 || (response.status &gt;= 500 &amp;&amp; response.status &lt; 600)) {
+      const delay = Math.min(1000 <em> Math.pow(2, retries) + Math.random() </em> 1000, 10000)
+      await new Promise(resolve =&gt; setTimeout(resolve, delay))
+      retries++
+      continue
+    }
+</p>
+
+<p>
+    return response
+  }
+}
+</p>
+
+<p>
+// Data transformation with filtering
+function transformGSCData(gscData: any, fetchDate: string, filters: GSCFilterCriteria = {}): any[] {
+  let processedRows = gscData.rows.map((row: any) =&gt; ({
+    fetched_date: fetchDate,
+    page_url: row.keys[0],
+    keyword: row.keys[1],
+    clicks: row.clicks || 0,
+    impressions: row.impressions || 0,
+    ctr: row.ctr || 0,
+    position: row.position || 0
+  }))
+</p>
+
+<p>
+  // Apply filters
+  processedRows = processedRows.filter((item: any) =&gt; {
+    if (filters.minPosition !== undefined &amp;&amp; item.position &lt; filters.minPosition) return false
+    if (filters.maxPosition !== undefined &amp;&amp; item.position &gt; filters.maxPosition) return false
+    if (filters.minImpressions !== undefined &amp;&amp; item.impressions &lt; filters.minImpressions) return false
+    if (filters.minClicks !== undefined &amp;&amp; item.clicks &lt; filters.minClicks) return false
+    return true
+  })
+</p>
+
+<p>
+  // Apply maxKeywordsPerUrl filter
+  if (filters.maxKeywordsPerUrl) {
+    const urlGroups: Record&lt;string, any[]&gt; = {}
+    processedRows.forEach((row: any) =&gt; {
+      if (!urlGroups[row.page_url]) urlGroups[row.page_url] = []
+      urlGroups[row.page_url].push(row)
+    })
+</p>
+
+<p>
+    let limitedRows: any[] = []
+    Object.keys(urlGroups).forEach(url =&gt; {
+      const sorted = urlGroups[url].sort((a, b) =&gt;
+        filters.keywordsSortBy === &#039;position&#039; ? a.position - b.position : b.impressions - a.impressions
+      )
+      limitedRows = limitedRows.concat(sorted.slice(0, filters.maxKeywordsPerUrl))
+    })
+</p>
+
+<p>
+    return limitedRows
+  }
+</p>
+
+<p>
+  return processedRows
+}</code></pre>
+</p>
+
+<p>
+<strong>Flow Chart</strong>:
+``<code>
+┌──────────────────────┐
+│  Validate Request    │
+│  - siteUrl           │
+│  - dateRange         │
+│  - credentials       │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Get/Generate Token  │
+│  - Check cache       │
+│  - Generate JWT      │
+│  - Cache for 55min   │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Test GSC Access     │
+│  - Fetch sites list  │
+│  - Verify permission │
+│  - Match site format │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Paginated Fetch     │
+│  - 25K rows per page │
+│  - Retry with backoff│
+│  - Collect all pages │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Transform & Filter  │
+│  - Apply position    │
+│  - Apply impressions │
+│  - Limit per URL     │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Bulk Insert to DB   │
+│  - bulk_insert_gsc   │
+│  - page_query table  │
+└──────────────────────┘
+</code>`<code>
+</p>
+
+<h3>Step 2: Page Crawling</h3>
+
+<p>
+<strong>Function</strong>: </code>submit-crawl-job/index.ts<code>
+</p>
+
+<p>
+<strong>Purpose</strong>: Fetch and store HTML content for analysis.
+</p>
+
+<p>
+<strong>Key Features</strong>:
+</p>
+<ul>
+<li>ScraperAPI integration</li>
+<li>Premium/ultra-premium proxy support</li>
+<li>JavaScript rendering option</li>
+<li>Configurable timeout</li>
+<li>Status tracking</li>
+</ul>
+
+<p>
+<strong>Key Code</strong>:
+</p>
+<pre><code class="language-typescript">// Submit crawl job
+<p>
+const response = await fetch(</code>https://api.scraperapi.com/?api_key=${apiKey}&amp;url=${encodeURIComponent(url)}&amp;premium=${premium}&amp;render=${render}<code>)
+</p>
+
+<p>
+const html = await response.text()
+</p>
+
+<p>
+// Store in database
+await supabase
+  .from(&#039;pages&#039;)
+  .upsert({
+    url,
+    html,
+    last_crawled: new Date().toISOString(),
+    crawl_status: &#039;completed&#039;
+  })</code></pre>
+</p>
+
+<h3>Step 3: Content Segmentation & Embedding</h3>
+
+<p>
+<strong>Function</strong>: </code>segment-and-embed-page/index.ts<code>
+</p>
+
+<p>
+<strong>Purpose</strong>: Break content into paragraphs and generate vector embeddings.
+</p>
+
+<p>
+<strong>Key Features</strong>:
+</p>
+<ul>
+<li>Cheerio-based HTML parsing</li>
+<li>Removes scripts, styles, navigation</li>
+<li>Extracts main content area</li>
+<li>Preserves heading hierarchy</li>
+<li>Parallel embedding generation</li>
+</ul>
+
+<p>
+<strong>Key Code</strong>:
+</p>
+<pre><code class="language-typescript">// Segment HTML into paragraphs
+<p>
+function segmentPageContent(html: string): Paragraph[] {
+  const $ = load(html)
+  const paragraphs: Paragraph[] = []
+  let paraIndex = 0
+</p>
+
+<p>
+  // Remove noise
+  $(&#039;script, style, nav, footer, header, .sidebar, .menu, .navigation, .comments, .ads&#039;).remove()
+</p>
+
+<p>
+  // Extract main content
+  const mainContent = $(&#039;main, #main, .main, article, .article, .content, #content, .post, #post&#039;)
+  const contentElement = mainContent.length &gt; 0 ? mainContent : $(&#039;body&#039;)
+</p>
+
+<p>
+  // Find paragraph-like elements
+  contentElement.find(&#039;p, h1, h2, h3, h4, h5, h6, li, blockquote, pre, td&#039;).each((_, element) =&gt; {
+    const text = $(element).text().trim()
+</p>
+
+<p>
+    if (text.length &gt; 0) {
+      let content = text
+      const tagName = element.tagName.toLowerCase()
+</p>
+
+<p>
+      // Mark headings
+      if (tagName.match(/^h[1-6]$/)) {
+        content = </code>[${tagName.toUpperCase()}] ${text}<code>
+      }
+</p>
+
+<p>
+      paragraphs.push({
+        paraIndex: paraIndex++,
+        content
+      })
+    }
+  })
+</p>
+
+<p>
+  return paragraphs
+}
+</p>
+
+<p>
+// Generate embeddings in parallel
+const embedResults = await Promise.all(
+  paragraphs.map(async (para) =&gt; {
+    const embedding = await generateEmbedding(para.content, apiKey)
+    return {
+      pageId,
+      paraIndex: para.paraIndex,
+      content: para.content,
+      embedding
+    }
+  })
+)
+</p>
+
+<p>
+// OpenAI embedding API call
+async function generateEmbedding(text: string, apiKey: string): Promise&lt;number[]&gt; {
+  const response = await fetch(&#039;https://api.openai.com/v1/embeddings&#039;, {
+    method: &#039;POST&#039;,
+    headers: {
+      &#039;Authorization&#039;: </code>Bearer ${apiKey}<code>,
+      &#039;Content-Type&#039;: &#039;application/json&#039;,
+    },
+    body: JSON.stringify({
+      model: &#039;text-embedding-ada-002&#039;,
+      input: text,
+    }),
+  })
+</p>
+
+<p>
+  const result = await response.json()
+  return result.data[0].embedding  // 1536-dimensional vector
+}</code></pre>
+</p>
+
+<p>
+<strong>Flow Chart</strong>:
+</code>`<code>
+┌──────────────────────┐
+│  Fetch Page HTML     │
+│  from pages table    │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Parse with Cheerio  │
+│  - Remove noise      │
+│  - Find main content │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Extract Paragraphs  │
+│  - <p> tags          │
+│  - Headings (H1-H6)  │
+│  - List items (<li>) │
+│  - Blockquotes       │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Generate Embeddings │
+│  - OpenAI API        │
+│  - Parallel requests │
+│  - 1536-dim vectors  │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│  Store Embeddings    │
+│  - Delete existing   │
+│  - Bulk insert new   │
+│  - page_embeddings   │
+└──────────────────────┘
+</code>`<code>
+</p>
+
+<h3>Step 4: Keyword Clustering</h3>
+
+<p>
+<strong>Function</strong>: </code>keyword-clustering/index.ts<code>
+</p>
+
+<p>
+<strong>Purpose</strong>: Group semantically similar keywords using DBSCAN algorithm.
+</p>
+
+<p>
+<strong>Key Features</strong>:
+</p>
+<ul>
+<li>OpenAI embeddings for keywords</li>
+<li>DBSCAN clustering algorithm</li>
+<li>Configurable epsilon and minSamples</li>
+<li>Cluster statistics calculation</li>
+<li>Representative keyword selection</li>
+</ul>
+
+<p>
+<strong>DBSCAN Algorithm</strong>:
+</code>`<code>
+Density-Based Spatial Clustering of Applications with Noise
+</p>
+
+<p>
+Parameters:
+</p>
+<ul>
+<li>epsilon (ε): Maximum distance between two points to be neighbors (default: 0.15)</li>
+<li>minSamples: Minimum points to form a dense region (default: 3)</li>
+</ul>
+
+<p>
+Steps:
+</p>
+<ol>
+<li>Mark all points as unvisited</li>
+<li>For each unvisited point P:</li>
+</ol>
+<p>
+   a. Mark P as visited
+   b. Find neighbors (points within epsilon distance)
+   c. If neighbors < minSamples, mark as noise
+   d. Else, start new cluster:
+      - Add P to cluster
+      - For each neighbor N:
+        - If unvisited, mark visited and find its neighbors
+        - If N not in any cluster, add to current cluster
+</code>`<code>
+</p>
+
+<p>
+<strong>Key Code</strong>:
+</p>
+<pre><code class="language-typescript">// DBSCAN implementation
+<p>
+function dbscan(
+  keywords: Keyword[],
+  epsilon: number,
+  minSamples: number
+): Record&lt;number, Keyword[]&gt; {
+  const visited: Record&lt;string, boolean&gt; = {}
+  const clusters: Record&lt;number, Keyword[]&gt; = {}
+  let clusterId = 0
+</p>
+
+<p>
+  for (const point of keywords) {
+    if (visited[point.id]) continue
+</p>
+
+<p>
+    visited[point.id] = true
+    const neighbors = regionQuery(keywords, point, epsilon)
+</p>
+
+<p>
+    // Noise point
+    if (neighbors.length &lt; minSamples) {
+      point.clusterId = -1
+      continue
+    }
+</p>
+
+<p>
+    // Core point - start new cluster
+    const currentClusterId = clusterId++
+    point.clusterId = currentClusterId
+    clusters[currentClusterId] = [point]
+</p>
+
+<p>
+    // Expand cluster
+    let neighborIndex = 0
+    while (neighborIndex &lt; neighbors.length) {
+      const neighbor = neighbors[neighborIndex++]
+</p>
+
+<p>
+      if (!visited[neighbor.id]) {
+        visited[neighbor.id] = true
+        const newNeighbors = regionQuery(keywords, neighbor, epsilon)
+</p>
+
+<p>
+        if (newNeighbors.length &gt;= minSamples) {
+          neighbors.push(...newNeighbors.filter(n =&gt;
+            !neighbors.some(existing =&gt; existing.id === n.id)
+          ))
+        }
+      }
+</p>
+
+<p>
+      if (neighbor.clusterId === undefined || neighbor.clusterId === -1) {
+        neighbor.clusterId = currentClusterId
+        clusters[currentClusterId].push(neighbor)
+      }
+    }
+  }
+</p>
+
+<p>
+  return clusters
+}
+</p>
+
+<p>
+// Find neighbors within epsilon distance
+function regionQuery(keywords: Keyword[], point: Keyword, epsilon: number): Keyword[] {
+  if (!point.embedding) return []
+</p>
+
+<p>
+  return keywords.filter(other =&gt; {
+    if (!other.embedding) return false
+    return point.id !== other.id &amp;&amp;
+           euclideanDistance(point.embedding, other.embedding) &lt;= epsilon
+  })
+}
+</p>
+
+<p>
+// Euclidean distance between vectors
+function euclideanDistance(a: number[], b: number[]): number {
+  return Math.sqrt(
+    a.reduce((sum, val, i) =&gt; sum + Math.pow(val - b[i], 2), 0)
+  )
+}</code></pre>
+</p>
+
+<p>
+<strong>Cluster Statistics</strong>:
+</p>
+<pre><code class="language-typescript">const clusterResults = Object.entries(clusters).map(([clusterId, members]) =&gt; {
+<p>
+  const avgImpressions = members.reduce((sum, k) =&gt; sum + k.impressions, 0) / members.length
+  const avgPosition = members.reduce((sum, k) =&gt; sum + k.position, 0) / members.length
+  const sortedMembers = [...members].sort((a, b) =&gt; b.impressions - a.impressions)
+</p>
+
+<p>
+  return {
+    clusterId: parseInt(clusterId),
+    size: members.length,
+    representative: sortedMembers[0].keyword,  // Highest impressions
+    topKeywords: sortedMembers.slice(0, 5).map(k =&gt; k.keyword),
+    keywords: members.map(k =&gt; k.keyword),
+    avgImpressions,
+    avgPosition,
+    totalImpressions: members.reduce((sum, k) =&gt; sum + k.impressions, 0)
+  }
+})</code></pre>
+</p>
+
+<h3>Step 5: Content Gap Analysis</h3>
+
+<p>
+<strong>Function</strong>: </code>content-gap-analysis/index.ts<code> (inferred from workflow)
+</p>
+
+<p>
+<strong>Purpose</strong>: Identify keyword clusters not well-covered by existing content.
+</p>
+
+<p>
+<strong>Algorithm</strong>:
+</code>`<code>
+For each keyword cluster:
+  1. Get cluster centroid (average of keyword embeddings)
+  2. For each paragraph embedding:
+     - Calculate cosine similarity with cluster centroid
+  3. Find max similarity score
+  4. If max similarity < threshold (e.g., 0.65):
+     - Mark as content gap
+     - Calculate opportunity score
+  5. Sort gaps by opportunity score
+</code>`<code>
+</p>
+
+<p>
+<strong>Opportunity Scoring</strong>:
+</p>
+<pre><code class="language-typescript">OpportunityScore = 0.7 <em> PositionScore + 0.3 </em> ImpressionScore
+
+<p>
+PositionScore = 1 / (1 + e^(0.5 <em> (position - 10)))
+ImpressionScore = log10(impressions + 1) / 10</code></pre>
+</p>
+
+<p>
+This formula:
+</p>
+<ul>
+<li>Prioritizes positions 5-15 (biggest potential gain)</li>
+<li>Values high-impression keywords</li>
+<li>Balances both factors (70/30 split)</li>
+</ul>
+
+<h3>Step 6: Workflow Orchestration</h3>
+
+<p>
+<strong>Function</strong>: </code>pageperfect-workflow/index.ts<code>
+</p>
+
+<p>
+<strong>Purpose</strong>: Chain all PagePerfect steps in the correct order with dependency management.
+</p>
+
+<p>
+<strong>Workflow Steps</strong>:
+</p>
+<pre><code class="language-typescript">const workflowSteps: WorkflowStep[] = [
+<p>
+  {
+    name: &#039;crawl&#039;,
+    function: &#039;submit-crawl-job&#039;,
+    depends: [],
+    params: () =&gt; ({ url, pageId, premium, ultraPremium, render })
+  },
+  {
+    name: &#039;waitForCrawl&#039;,
+    function: &#039;wait-for-crawl-job&#039;,
+    depends: [&#039;crawl&#039;],
+    params: (data) =&gt; ({ jobId: data.crawl.jobId, maxWaitTimeMs: 300000 })
+  },
+  {
+    name: &#039;embed&#039;,
+    function: &#039;segment-and-embed-page&#039;,
+    depends: [&#039;waitForCrawl&#039;],
+    params: () =&gt; ({ pageId, openaiApiKey })
+  },
+  {
+    name: &#039;cluster&#039;,
+    function: &#039;keyword-clustering&#039;,
+    depends: [&#039;embed&#039;],
+    params: () =&gt; ({ pageId, openaiApiKey })
+  },
+  {
+    name: &#039;analyze&#039;,
+    function: &#039;content-gap-analysis&#039;,
+    depends: [&#039;embed&#039;, &#039;cluster&#039;],
+    params: () =&gt; ({ pageId, openaiApiKey })
+  },
+  {
+    name: &#039;rewrite&#039;,
+    function: &#039;generate-rewrite-draft&#039;,
+    depends: [&#039;analyze&#039;],
+    params: (data) =&gt; {
+      const topGap = data.analyze?.gapAnalysis?.[0]
+      return { pageId, clusterId: topGap?.clusterId, openaiApiKey }
+    }
+  }
+]</code></pre>
+</p>
+
+<p>
+<strong>Key Features</strong>:
+</p>
+<ul>
+<li><strong>Dependency Checking</strong>: Won't execute step if dependencies not met</li>
+<li><strong>Smart Caching</strong>: Skips recently executed steps (24-hour window)</li>
+<li><strong>Status Tracking</strong>: Records start/complete/error events</li>
+<li><strong>Timeout Handling</strong>: Different timeouts per step type</li>
+<li><strong>Force Update</strong>: Override caching with </code>forceUpdate: true<code></li>
+<li><strong>Step Skipping</strong>: Selectively skip steps with </code>skipSteps: ['crawl', 'embed']<code></li>
+</ul>
+
+<p>
+<strong>Key Code</strong>:
+</p>
+<pre><code class="language-typescript">// Check if step needs execution
+<p>
+let shouldExecute = forceUpdate
+</p>
+
+<p>
+if (!shouldExecute) {
+  const { data: recentExecution } = await supabase
+    .from(&#039;pageperfect_processing_events&#039;)
+    .select(&#039;created_at&#039;)
+    .eq(&#039;page_id&#039;, pageId)
+    .eq(&#039;event_type&#039;, </code>${step.name}_complete<code>)
+    .gt(&#039;created_at&#039;, new Date(Date.now() - 24 </em> 60 <em> 60 </em> 1000).toISOString())
+    .limit(1)
+</p>
+
+<p>
+  shouldExecute = !recentExecution || recentExecution.length === 0
+}
+</p>
+
+<p>
+if (!shouldExecute) {
+  console.log(</code>Skipping step (recently executed): ${step.name}<code>)
+</p>
+
+<p>
+  // Get cached results
+  const { data: prevResult } = await supabase
+    .from(&#039;pageperfect_processing_events&#039;)
+    .select(&#039;details&#039;)
+    .eq(&#039;page_id&#039;, pageId)
+    .eq(&#039;event_type&#039;, </code>${step.name}_complete<code>)
+    .order(&#039;created_at&#039;, { ascending: false })
+    .limit(1)
+</p>
+
+<p>
+  if (prevResult &amp;&amp; prevResult.length &gt; 0) {
+    results[step.name] = prevResult[0].details.result
+  }
+</p>
+
+<p>
+  continue
+}</code></pre>
+</p>
+
+<h2>Database Schema</h2>
+
+<h3>gsc_page_query</h3>
+
+<p>
+Primary GSC data storage:
+</p>
+
+<pre><code class="language-sql">CREATE TABLE gsc_page_query (
+<p>
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  fetched_date DATE NOT NULL,
+  page_url TEXT NOT NULL,
+  keyword TEXT NOT NULL,
+  clicks INTEGER DEFAULT 0,
+  impressions INTEGER DEFAULT 0,
+  ctr REAL DEFAULT 0,
+  position REAL DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(fetched_date, page_url, keyword)
+);
+</p>
+
+<p>
+CREATE INDEX idx_gsc_page_query_page ON gsc_page_query(page_url);
+CREATE INDEX idx_gsc_page_query_keyword ON gsc_page_query(keyword);
+CREATE INDEX idx_gsc_page_query_position ON gsc_page_query(position);
+CREATE INDEX idx_gsc_page_query_impressions ON gsc_page_query(impressions);</code></pre>
+</p>
+
+<h3>pages</h3>
+
+<p>
+Page metadata and HTML storage:
+</p>
+
+<pre><code class="language-sql">CREATE TABLE pages (
+<p>
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  url TEXT UNIQUE NOT NULL,
+  html TEXT,
+  last_crawled TIMESTAMPTZ,
+  crawl_status TEXT,  -- &#039;pending&#039;, &#039;completed&#039;, &#039;failed&#039;
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);</code></pre>
+</p>
+
+<h3>page_embeddings</h3>
+
+<p>
+Paragraph-level vector embeddings:
+</p>
+
+<pre><code class="language-sql">CREATE TABLE page_embeddings (
+<p>
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  page_id UUID REFERENCES pages(id) ON DELETE CASCADE,
+  para_index INTEGER NOT NULL,
+  content TEXT NOT NULL,
+  embedding vector(1536),  -- pgvector extension
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(page_id, para_index)
+);
+</p>
+
+<p>
+CREATE INDEX idx_page_embeddings_page ON page_embeddings(page_id);
+CREATE INDEX idx_page_embeddings_vector ON page_embeddings USING ivfflat (embedding vector_cosine_ops);</code></pre>
+</p>
+
+<h3>gsc_keywords (inferred)</h3>
+
+<p>
+Keyword data with embeddings:
+</p>
+
+<pre><code class="language-sql">CREATE TABLE gsc_keywords (
+<p>
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  page_id UUID REFERENCES pages(id),
+  keyword TEXT NOT NULL,
+  impressions INTEGER DEFAULT 0,
+  position REAL DEFAULT 0,
+  clicks INTEGER DEFAULT 0,
+  ctr REAL DEFAULT 0,
+  embedding vector(1536),
+  cluster_id INTEGER,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+</p>
+
+<p>
+CREATE INDEX idx_gsc_keywords_page ON gsc_keywords(page_id);
+CREATE INDEX idx_gsc_keywords_cluster ON gsc_keywords(cluster_id);</code></pre>
+</p>
+
+<h3>keyword_clusters (inferred)</h3>
+
+<p>
+Cluster metadata:
+</p>
+
+<pre><code class="language-sql">CREATE TABLE keyword_clusters (
+<p>
+  id INTEGER PRIMARY KEY,
+  page_id UUID REFERENCES pages(id),
+  representative_keyword TEXT,
+  size INTEGER,
+  avg_impressions REAL,
+  avg_position REAL,
+  total_impressions INTEGER,
+  centroid vector(1536),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);</code></pre>
+</p>
+
+<h3>pageperfect_processing_events</h3>
+
+<p>
+Workflow execution tracking:
+</p>
+
+<pre><code class="language-sql">CREATE TABLE pageperfect_processing_events (
+<p>
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  page_id UUID REFERENCES pages(id),
+  event_type TEXT NOT NULL,  -- &#039;workflow_start&#039;, &#039;crawl_complete&#039;, &#039;embed_complete&#039;, etc.
+  details JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+</p>
+
+<p>
+CREATE INDEX idx_pageperfect_events_page ON pageperfect_processing_events(page_id);
+CREATE INDEX idx_pageperfect_events_type ON pageperfect_processing_events(event_type);</code></pre>
+</p>
+
+<h2>Configuration</h2>
+
+<h3>Environment Variables</h3>
+
+<pre><code class="language-bash">&lt;h1&gt;OpenAI API for embeddings&lt;/h1&gt;
+<p>
+OPENAI_API_KEY=sk-...
+</p>
+
+<p>
+&lt;h1&gt;GSC service account credentials (JSON)&lt;/h1&gt;
+GSC_CREDENTIALS={&quot;private_key&quot;:&quot;...&quot;,&quot;client_email&quot;:&quot;...&quot;}
+</p>
+
+<p>
+&lt;h1&gt;Or direct API token&lt;/h1&gt;
+GSC_API_TOKEN=ya29....
+</p>
+
+<p>
+&lt;h1&gt;ScraperAPI for web crawling&lt;/h1&gt;
+SCRAPER_API_KEY=...
+</p>
+
+<p>
+&lt;h1&gt;Supabase (auto-set)&lt;/h1&gt;
+SUPABASE_URL=https://project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...</code></pre>
+</p>
+
+<h3>Clustering Parameters</h3>
+
+<p>
+Tuning DBSCAN for your use case:
+</p>
+
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+<th>When to Increase</th>
+<th>When to Decrease</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></code>epsilon<code></td>
+<td>0.15</td>
+<td>Max distance for neighbors</td>
+<td>Keywords too tightly clustered</td>
+<td>Too many noise points</td>
+</tr>
+<tr>
+<td></code>minSamples<code></td>
+<td>3</td>
+<td>Min points for cluster</td>
+<td>Small, fragmented clusters</td>
+<td>Want tighter clusters</td>
+</tr>
+<tr>
+<td></code>minImpressions<code></td>
+<td>10</td>
+<td>Filter low-traffic keywords</td>
+<td>Too much noise</td>
+<td>Missing long-tail keywords</td>
+</tr>
+</tbody>
+</table>
+<h2>Performance Considerations</h2>
+
+<h3>Embedding Generation</h3>
+
+<ul>
+<li><strong>Cost</strong>: ~$0.0001 per 1K tokens (text-embedding-ada-002)</li>
+<li><strong>Rate Limit</strong>: 3,000 RPM (requests per minute)</li>
+<li><strong>Optimization</strong>: Batch embed multiple items, cache results</li>
+</ul>
+
+<h3>Vector Search</h3>
+
+<ul>
+<li><strong>pgvector IVFFlat Index</strong>: Approximates nearest neighbors</li>
+<li><strong>Index Parameters</strong>: </code>lists<code> parameter affects speed vs accuracy</li>
+<li><strong>Query</strong>: Use </code>vector_cosine_ops<code> for cosine similarity</li>
+</ul>
+
+<h3>Workflow Caching</h3>
+
+<ul>
+<li><strong>24-Hour Cache</strong>: Prevents re-running expensive steps</li>
+<li><strong>Force Update</strong>: Override cache when content significantly changes</li>
+<li><strong>Event Table</strong>: Lightweight logging, low overhead</li>
+</ul>
+
+<h2>Monitoring & Debugging</h2>
+
+<h3>Check PagePerfect Status</h3>
+
+<pre><code class="language-sql">-- Get recent workflow events
+<p>
+SELECT page_id, event_type, created_at, details
+FROM pageperfect_processing_events
+WHERE page_id = &#039;page-id-here&#039;
+ORDER BY created_at DESC;
+</p>
+
+<p>
+-- Check page embeddings
+SELECT COUNT(<em>), AVG(LENGTH(content))
+FROM page_embeddings
+WHERE page_id = &#039;page-id-here&#039;;
+</p>
+
+<p>
+-- View keyword clusters
+SELECT cluster_id, COUNT(</em>) as size, AVG(impressions), AVG(position)
+FROM gsc_keywords
+WHERE page_id = &#039;page-id-here&#039; AND cluster_id IS NOT NULL
+GROUP BY cluster_id
+ORDER BY AVG(impressions) DESC;
+</p>
+
+<p>
+-- Find content gaps (low similarity scores)
+SELECT
+  k.cluster_id,
+  k.representative_keyword,
+  MAX(pe.embedding &lt;=&gt; kc.centroid) as max_similarity
+FROM keyword_clusters k
+JOIN page_embeddings pe ON pe.page_id = k.page_id
+WHERE k.page_id = &#039;page-id-here&#039;
+GROUP BY k.cluster_id, k.representative_keyword
+HAVING MAX(pe.embedding &lt;=&gt; kc.centroid) &lt; 0.65
+ORDER BY k.total_impressions DESC;</code></pre>
+</p>
+
+<h3>GSC Data Quality</h3>
+
+<pre><code class="language-sql">-- Check date range coverage
+<p>
+SELECT MIN(fetched_date), MAX(fetched_date), COUNT(DISTINCT fetched_date)
+FROM gsc_page_query;
+</p>
+
+<p>
+-- Top pages by impressions
+SELECT page_url, SUM(impressions) as total_impressions, COUNT(DISTINCT keyword) as keyword_count
+FROM gsc_page_query
+WHERE fetched_date &gt;= NOW() - INTERVAL &#039;30 days&#039;
+GROUP BY page_url
+ORDER BY total_impressions DESC
+LIMIT 20;
+</p>
+
+<p>
+-- Position distribution
+SELECT
+  CASE
+    WHEN position &lt;= 3 THEN &#039;1-3&#039;
+    WHEN position &lt;= 10 THEN &#039;4-10&#039;
+    WHEN position &lt;= 20 THEN &#039;11-20&#039;
+    ELSE &#039;21+&#039;
+  END as position_bucket,
+  COUNT(*) as keyword_count,
+  SUM(impressions) as total_impressions
+FROM gsc_page_query
+WHERE fetched_date &gt;= NOW() - INTERVAL &#039;30 days&#039;
+GROUP BY position_bucket
+ORDER BY position_bucket;</code></pre>
+</p>
+
+<h2>Integration Example</h2>
+
+<h3>Running Full PagePerfect Workflow</h3>
+
+<pre><code class="language-typescript">async function analyzePageForSEO(url: string) {
+<p>
+  // Step 1: Ensure GSC data is ingested (run separately/scheduled)
+  // This would typically be done via cron, not per-page
+</p>
+
+<p>
+  // Step 2: Run PagePerfect workflow
+  const response = await fetch(&#039;https://project.supabase.co/functions/v1/pageperfect-workflow&#039;, {
+    method: &#039;POST&#039;,
+    headers: {
+      &#039;Content-Type&#039;: &#039;application/json&#039;,
+      &#039;Authorization&#039;: </code>Bearer ${SUPABASE_SERVICE_KEY}<code>,
+    },
+    body: JSON.stringify({
+      url,
+      forceUpdate: false,  // Use cache if available
+      skipSteps: [],
+      openaiApiKey: process.env.OPENAI_API_KEY,
+      premium: false,
+      render: true,
+    }),
+  })
+</p>
+
+<p>
+  const result = await response.json()
+</p>
+
+<p>
+  if (result.success) {
+    console.log(&#039;Page analysis complete&#039;)
+    console.log(&#039;Workflow results:&#039;, result.results)
+</p>
+
+<p>
+    // Access specific results
+    const embeddings = result.results.embed
+    const clusters = result.results.cluster
+    const gaps = result.results.analyze
+</p>
+
+<p>
+    // Display content gaps
+    console.log(&#039;Content gaps found:&#039;, gaps.gapAnalysis?.length)
+    gaps.gapAnalysis?.forEach(gap =&gt; {
+      console.log(</code>- ${gap.representative}: ${gap.opportunityScore.toFixed(2)} opportunity score`)
+    })
+  } else {
+    console.error(&#039;Workflow failed:&#039;, result.error)
+  }
+}</code></pre>
+</p>
+
+<h2>Related Documentation</h2>
+
+<ul>
+<li><a href="./GSC-INTEGRATION-SYSTEM.md">GSC Integration System</a></li>
+<li><a href="./PLANPERFECT-SYSTEM.md">PlanPerfect System</a></li>
+<li><a href="./OUTLINE-GENERATION-SYSTEM.md">Outline Generation System</a></li>
+<li><a href="../outline-fast-readme.md">Fast Mode Outline Guide</a></li>
+</ul>
+
+    </main>
+
+    <footer class="doc-footer">
+        <p>© 2025 Loud Interactive. All rights reserved.</p>
+        <p class="text-muted">For questions or support, contact: <a href="mailto:support@loud.us">support@loud.us</a></p>
+    </footer>
+</body>
+</html>

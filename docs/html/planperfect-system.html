@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PlanPerfect System Documentation - Loud Interactive Documentation</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>
+      mermaid.initialize({
+        startOnLoad: true,
+        theme: 'base',
+        themeVariables: {
+          primaryColor: '#FEDFCE',
+          primaryTextColor: '#3E3E3E',
+          primaryBorderColor: '#FF5900',
+          lineColor: '#FF5900',
+          secondaryColor: '#CEDFFE',
+          tertiaryColor: '#F8FCDA',
+          background: '#FFFFFF',
+          mainBkg: '#FEDFCE',
+          secondBkg: '#CEDFFE',
+          tertiaryBkg: '#F8FCDA',
+          nodeBorder: '#FF5900',
+          clusterBkg: '#FFFFFF',
+          clusterBorder: '#3E3E3E',
+          defaultLinkColor: '#FF5900',
+          titleColor: '#3E3E3E',
+          edgeLabelBackground: '#FFFFFF',
+          actorBorder: '#FF5900',
+          actorBkg: '#FEDFCE',
+          actorTextColor: '#3E3E3E',
+          actorLineColor: '#3E3E3E',
+          signalColor: '#3E3E3E',
+          signalTextColor: '#3E3E3E',
+          labelBoxBkgColor: '#FEDFCE',
+          labelBoxBorderColor: '#FF5900',
+          labelTextColor: '#3E3E3E',
+          loopTextColor: '#3E3E3E',
+          activationBorderColor: '#FF5900',
+          activationBkgColor: '#FEDFCE',
+          sequenceNumberColor: '#FFFFFF'
+        }
+      });
+    </script>
+    <style>
+      @media print {
+        @page {
+          size: A4;
+          margin: 2cm;
+        }
+        body {
+          print-color-adjust: exact;
+          -webkit-print-color-adjust: exact;
+        }
+        .no-print {
+          display: none;
+        }
+      }
+    </style>
+</head>
+<body>
+    <div class="doc-header">
+        <h1>PlanPerfect System Documentation</h1>
+        <div class="doc-subtitle">Comprehensive technical documentation for the pp-supabase platform</div>
+        <div class="doc-meta">
+            Loud Interactive Technical Documentation • Generated 10/10/2025
+        </div>
+    </div>
+
+    <main class="doc-content">
+        <h1>PlanPerfect System Documentation</h1>
+
+<h2>Overview</h2>
+
+<p>
+PlanPerfect is an AI-powered content generation system that orchestrates a multi-stage pipeline to create high-quality, SEO-optimized content. The system uses a worker-based architecture with queue management to handle long-running content generation tasks without hitting Edge Function timeout limits.
+</p>
+
+<p>
+<strong>Key Capabilities</strong>:
+</p>
+<ul>
+<li>🔄 Multi-stage content pipeline (Research → Outline → Draft → QA → Export → Complete)</li>
+<li>⏱️ Asynchronous job processing with queue management</li>
+<li>🔁 Automatic retry logic with configurable attempts</li>
+<li>📊 Granular status tracking and event logging</li>
+<li>🎯 Stage-specific worker specialization</li>
+<li>⚡ Fire-and-forget execution pattern</li>
+</ul>
+
+<h2>Architecture Overview</h2>
+
+<h3>High-Level Flow</h3>
+
+<pre><code class="language-mermaid">graph TD
+<p>
+    A[Client] --&gt;|POST /content-intake| B[Content Intake Function]
+    B --&gt;|Create Job| C[(content_jobs table)]
+    B --&gt;|Enqueue| D[(pgmq Queue)]
+    D --&gt;|Dequeue| E[Research Worker]
+    E --&gt;|Complete| D
+    D --&gt;|Dequeue| F[Outline Worker]
+    F --&gt;|Complete| D
+    D --&gt;|Dequeue| G[Draft Worker]
+    G --&gt;|Complete| D
+    D --&gt;|Dequeue| H[QA Worker]
+    H --&gt;|Complete| D
+    D --&gt;|Dequeue| I[Export Worker]
+    I --&gt;|Complete| D
+    D --&gt;|Dequeue| J[Complete Worker]
+    J --&gt;|Complete| K[Final Content]</code></pre>
+</p>
+
+<h3>System Components</h3>
+
+<ol>
+<li><strong>Intake Function</strong> (<code>content-intake</code>)</li>
+</ol>
+<p>
+   - Entry point for content generation requests
+   - Creates job records in database
+   - Enqueues jobs into pgmq queue
+   - Returns job_id immediately (fire-and-forget)
+</p>
+
+<ol>
+<li><strong>Worker Functions</strong> (6 specialized workers)</li>
+</ol>
+<p>
+   - <code>content-research-worker</code>: Research and information gathering
+   - <code>content-outline-worker</code>: Structure and outline creation
+   - <code>content-draft-worker</code>: Full content generation
+   - <code>content-qa-worker</code>: Quality assurance and validation
+   - <code>content-export-worker</code>: Format and export preparation
+   - <code>content-complete-worker</code>: Finalization and cleanup
+</p>
+
+<ol>
+<li><strong>Queue System</strong> (pgmq)</li>
+</ol>
+<p>
+   - PostgreSQL-based message queue (pgmq extension)
+   - Message visibility timeout (default: 600 seconds)
+   - Automatic message archiving after processing
+   - Stage-based routing
+</p>
+
+<ol>
+<li><strong>Database Tables</strong></li>
+</ol>
+<p>
+   - <code>content_jobs</code>: Job metadata and current status
+   - <code>content_payloads</code>: Stage-specific data and results
+   - <code>content_events</code>: Granular event logging
+   - <code>content_stages</code>: Stage execution tracking
+</p>
+
+<h2>Detailed Workflow</h2>
+
+<h3>Stage 1: Content Intake</h3>
+
+<p>
+<strong>Function</strong>: <code>content-intake/index.ts</code>
+</p>
+
+<p>
+<strong>Purpose</strong>: Accept content generation requests and initialize the job pipeline.
+</p>
+
+<pre><code class="language-typescript">// Request format
+<p>
+{
+  &quot;job_type&quot;: &quot;article&quot; | &quot;schema&quot;,
+  &quot;requester_email&quot;: &quot;user@example.com&quot;,
+  &quot;payload&quot;: {
+    &quot;title&quot;: &quot;Article Title&quot;,
+    &quot;keywords&quot;: [&quot;keyword1&quot;, &quot;keyword2&quot;],
+    &quot;domain&quot;: &quot;example.com&quot;
+  },
+  &quot;initial_stage&quot;: &quot;research&quot;  // Optional, defaults to &quot;research&quot;
+}
+</p>
+
+<p>
+// Response format
+{
+  &quot;job_id&quot;: &quot;uuid-here&quot;,
+  &quot;status&quot;: &quot;queued&quot;,
+  &quot;stage&quot;: &quot;research&quot;
+}</code></pre>
+</p>
+
+<p>
+<strong>Key Code</strong>:
+</p>
+<pre><code class="language-typescript">// Create job in database
+<p>
+const { data, error } = await supabaseAdmin
+  .from(&#039;content_jobs&#039;)
+  .insert({
+    job_type: jobType,
+    requester_email: body.requester_email,
+    payload,
+    status: &#039;queued&#039;,
+    stage: initialStage,
+  })
+  .select(&#039;id&#039;)
+  .single()
+</p>
+
+<p>
+// Log event
+await insertEvent(jobId, &#039;queued&#039;, &#039;Job queued by intake&#039;, {
+  payload_keys: Object.keys(payload)
+})
+</p>
+
+<p>
+// Enqueue to appropriate queue
+await enqueueJob(
+  jobType === &#039;schema&#039; ? &#039;schema&#039; : &#039;content&#039;,
+  jobId,
+  initialStage,
+  payload
+)</code></pre>
+</p>
+
+<p>
+<strong>Flow Chart</strong>:
+``<code>
+┌─────────────────┐
+│  Client Request │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Validate Request│
+│  - job_type     │
+│  - payload      │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Create Job     │
+│  Record in DB   │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Insert Event   │
+│  "queued"       │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Enqueue to     │
+│  pgmq Queue     │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│  Return job_id  │
+│  to Client      │
+└─────────────────┘
+</code>`<code>
+</p>
+
+<h3>Stage 2: Research Worker</h3>
+
+<p>
+<strong>Function</strong>: </code>content-research-worker/index.ts<code>
+</p>
+
+<p>
+<strong>Purpose</strong>: Gather research data, search APIs, scrape sources, and prepare research foundation.
+</p>
+
+<p>
+<strong>Key Features</strong>:
+</p>
+<ul>
+<li>Dequeues messages from pgmq</li>
+<li>Checks stage and forwards if mismatched</li>
+<li>Tracks attempt count for retries</li>
+<li>Runs work in background (fire-and-forget)</li>
+<li>Archives message after processing</li>
+</ul>
+
+<p>
+<strong>Key Code</strong>:
+</p>
+<pre><code class="language-typescript">// Dequeue message with visibility timeout
+<p>
+const { data, error } = await supabaseAdmin.rpc(&#039;dequeue_stage&#039;, {
+  p_queue: &#039;content&#039;,
+  p_visibility: visibility, // 600 seconds default
+})
+</p>
+
+<p>
+// Stage validation and forwarding
+if (stage !== &#039;research&#039;) {
+  console.log(</code>Research worker received stage ${stage}, forwarding<code>)
+  await enqueueJob(&#039;content&#039;, jobId, stage, payload)
+  await supabaseAdmin.rpc(&#039;archive_message&#039;, {
+    p_queue: &#039;content&#039;,
+    p_msg_id: msg_id
+  })
+  return
+}
+</p>
+
+<p>
+// Start stage tracking
+await insertEvent(jobId, &#039;processing&#039;, &#039;Research stage started&#039;, payload)
+const attempt = await startStage(jobId, &#039;research&#039;)
+</p>
+
+<p>
+// Background work (fire-and-forget)
+const work = (async () =&gt; {
+  // TODO: Implement real research
+  const researchResult = {
+    note: &#039;Research worker placeholder&#039;,
+    payload,
+    completed_at: new Date().toISOString(),
+  }
+</p>
+
+<p>
+  // Save results
+  await supabaseAdmin
+    .from(&#039;content_payloads&#039;)
+    .upsert({ job_id: jobId, stage: &#039;research&#039;, data: researchResult })
+</p>
+
+<p>
+  // Complete stage
+  await completeStage(jobId, &#039;research&#039;)
+</p>
+
+<p>
+  // Update job to next stage
+  await supabaseAdmin
+    .from(&#039;content_jobs&#039;)
+    .update({ stage: &#039;outline&#039;, status: &#039;queued&#039; })
+    .eq(&#039;id&#039;, jobId)
+</p>
+
+<p>
+  // Enqueue next stage
+  await enqueueJob(&#039;content&#039;, jobId, &#039;outline&#039;, { from: &#039;research-worker&#039; })
+</p>
+
+<p>
+  // Archive message
+  await supabaseAdmin.rpc(&#039;archive_message&#039;, {
+    p_queue: &#039;content&#039;,
+    p_msg_id: msg_id
+  })
+})()
+</p>
+
+<p>
+runBackground(work) // Fire and forget</code></pre>
+</p>
+
+<p>
+<strong>Flow Chart</strong>:
+</code>`<code>
+┌──────────────────┐
+│ Dequeue Message  │
+│  from pgmq       │
+└────────┬─────────┘
+         │
+         ▼
+    ┌─────────┐
+    │ Empty?  │───Yes──▶ Return 204 No Content
+    └────┬────┘
+         │ No
+         ▼
+┌──────────────────┐
+│  Extract job_id  │
+│  stage, payload  │
+└────────┬─────────┘
+         │
+         ▼
+    ┌─────────────┐
+    │Stage Match? │───No──▶ Forward to Correct Stage
+    └────┬────────┘
+         │ Yes
+         ▼
+┌──────────────────┐
+│  Insert Event    │
+│  "processing"    │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Start Stage     │
+│  (attempt count) │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Fire-and-Forget │
+│  Background Work │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Return 202      │
+│  "scheduled"     │
+└──────────────────┘
+</p>
+
+<p>
+Background Process:
+         │
+         ▼
+┌──────────────────┐
+│  Do Research     │
+│  (API calls,     │
+│   scraping, etc) │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Save Results    │
+│  to Payloads     │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Complete Stage  │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Update Job      │
+│  stage="outline" │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Enqueue Next    │
+│  Stage           │
+└────────┬─────────┘
+         │
+         ▼
+┌──────────────────┐
+│  Archive Message │
+└──────────────────┘
+</code>`<code>
+</p>
+
+<h3>Stage 3: Outline Worker</h3>
+
+<p>
+<strong>Function</strong>: </code>content-outline-worker/index.ts<code>
+</p>
+
+<p>
+<strong>Purpose</strong>: Generate structured outline based on research data.
+</p>
+
+<p>
+<strong>Key Features</strong>:
+</p>
+<ul>
+<li>Same pattern as research worker</li>
+<li>Dequeue → Validate → Process → Enqueue next</li>
+<li>Stores outline structure in payloads</li>
+<li>Forwards to draft stage upon completion</li>
+</ul>
+
+<p>
+<strong>Key Code</strong>:
+</p>
+<pre><code class="language-typescript">const work = (async () =&gt; {
+<p>
+  const outlineResult = {
+    note: &#039;Outline worker placeholder&#039;,
+    sections: [],
+    completed_at: new Date().toISOString(),
+  }
+</p>
+
+<p>
+  await supabaseAdmin
+    .from(&#039;content_payloads&#039;)
+    .upsert({ job_id: jobId, stage: &#039;outline&#039;, data: outlineResult })
+</p>
+
+<p>
+  await completeStage(jobId, &#039;outline&#039;)
+</p>
+
+<p>
+  await supabaseAdmin
+    .from(&#039;content_jobs&#039;)
+    .update({ stage: &#039;draft&#039;, status: &#039;queued&#039; })
+    .eq(&#039;id&#039;, jobId)
+</p>
+
+<p>
+  await enqueueJob(&#039;content&#039;, jobId, &#039;draft&#039;, { from: &#039;outline-worker&#039; })
+</p>
+
+<p>
+  await supabaseAdmin.rpc(&#039;archive_message&#039;, {
+    p_queue: &#039;content&#039;,
+    p_msg_id: msg_id
+  })
+})()</code></pre>
+</p>
+
+<h3>Stage 4: Draft Worker</h3>
+
+<p>
+<strong>Function</strong>: </code>content-draft-worker/index.ts<code>
+</p>
+
+<p>
+<strong>Purpose</strong>: Generate full content draft based on outline and research.
+</p>
+
+<p>
+<strong>Key Features</strong>:
+</p>
+<ul>
+<li>Retrieves research and outline data from previous stages</li>
+<li>Generates complete article content</li>
+<li>Forwards to QA stage for validation</li>
+</ul>
+
+<h3>Stage 5: QA Worker</h3>
+
+<p>
+<strong>Function</strong>: </code>content-qa-worker/index.ts<code>
+</p>
+
+<p>
+<strong>Purpose</strong>: Quality assurance and validation of generated content.
+</p>
+
+<p>
+<strong>Key Features</strong>:
+</p>
+<ul>
+<li>Validates content quality</li>
+<li>Checks for completeness</li>
+<li>Verifies SEO requirements</li>
+<li>Forwards to export stage</li>
+</ul>
+
+<h3>Stage 6: Export Worker</h3>
+
+<p>
+<strong>Function</strong>: </code>content-export-worker/index.ts<code>
+</p>
+
+<p>
+<strong>Purpose</strong>: Format content for final export (WordPress, Shopify, etc).
+</p>
+
+<p>
+<strong>Key Features</strong>:
+</p>
+<ul>
+<li>Formats content for target platform</li>
+<li>Generates schema markup</li>
+<li>Prepares images and media</li>
+<li>Forwards to complete stage</li>
+</ul>
+
+<h3>Stage 7: Complete Worker</h3>
+
+<p>
+<strong>Function</strong>: </code>content-complete-worker/index.ts<code>
+</p>
+
+<p>
+<strong>Purpose</strong>: Finalize job and trigger any post-processing.
+</p>
+
+<p>
+<strong>Key Features</strong>:
+</p>
+<ul>
+<li>Marks job as complete</li>
+<li>Triggers notifications</li>
+<li>Archives job data</li>
+<li>Cleanup temporary resources</li>
+</ul>
+
+<h2>Error Handling & Retry Logic</h2>
+
+<h3>Retry Mechanism</h3>
+
+<p>
+Each worker implements automatic retry logic:
+</p>
+
+<pre><code class="language-typescript">const maxAttempts = Number(Deno.env.get(&#039;CONTENT_STAGE_MAX_ATTEMPTS&#039;) ?? &#039;3&#039;)
+
+<p>
+try {
+  // Do work...
+  await completeStage(jobId, &#039;research&#039;)
+} catch (workerError) {
+  console.error(&#039;Research worker failure&#039;, workerError)
+  await insertEvent(jobId, &#039;error&#039;, &#039;Research stage failed&#039;, { error: workerError })
+  await failStage(jobId, &#039;research&#039;, workerError)
+</p>
+
+<p>
+  // Retry if under max attempts
+  if (attempt &lt; maxAttempts) {
+    await enqueueJob(&#039;content&#039;, jobId, &#039;research&#039;, payload)
+  }
+  await supabaseAdmin.rpc(&#039;archive_message&#039;, {
+    p_queue: &#039;content&#039;,
+    p_msg_id: msg_id
+  })
+}</code></pre>
+</p>
+
+<h3>Error States</h3>
+
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Description</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td></code>queued<code></td>
+<td>Job waiting in queue</td>
+<td>Normal state</td>
+</tr>
+<tr>
+<td></code>processing<code></td>
+<td>Worker actively processing</td>
+<td>Normal state</td>
+</tr>
+<tr>
+<td></code>completed<code></td>
+<td>Stage completed successfully</td>
+<td>Move to next stage</td>
+</tr>
+<tr>
+<td></code>error<code></td>
+<td>Stage failed</td>
+<td>Retry if attempts < max</td>
+</tr>
+<tr>
+<td></code>failed<code></td>
+<td>All retries exhausted</td>
+<td>Manual intervention required</td>
+</tr>
+</tbody>
+</table>
+<h2>Database Schema</h2>
+
+<h3>content_jobs</h3>
+
+<p>
+Primary job tracking table:
+</p>
+
+<pre><code class="language-sql">CREATE TABLE content_jobs (
+<p>
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  job_type TEXT NOT NULL,  -- &#039;article&#039;, &#039;schema&#039;, etc.
+  requester_email TEXT,
+  payload JSONB,
+  status TEXT NOT NULL,    -- &#039;queued&#039;, &#039;processing&#039;, &#039;completed&#039;, &#039;failed&#039;
+  stage TEXT NOT NULL,     -- Current stage: &#039;research&#039;, &#039;outline&#039;, etc.
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);</code></pre>
+</p>
+
+<h3>content_payloads</h3>
+
+<p>
+Stage-specific results storage:
+</p>
+
+<pre><code class="language-sql">CREATE TABLE content_payloads (
+<p>
+  job_id UUID REFERENCES content_jobs(id),
+  stage TEXT NOT NULL,
+  data JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  PRIMARY KEY (job_id, stage)
+);</code></pre>
+</p>
+
+<h3>content_events</h3>
+
+<p>
+Granular event logging:
+</p>
+
+<pre><code class="language-sql">CREATE TABLE content_events (
+<p>
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  job_id UUID REFERENCES content_jobs(id),
+  event_type TEXT NOT NULL,  -- &#039;queued&#039;, &#039;processing&#039;, &#039;completed&#039;, &#039;error&#039;
+  message TEXT,
+  metadata JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);</code></pre>
+</p>
+
+<h3>content_stages</h3>
+
+<p>
+Stage execution tracking:
+</p>
+
+<pre><code class="language-sql">CREATE TABLE content_stages (
+<p>
+  job_id UUID REFERENCES content_jobs(id),
+  stage TEXT NOT NULL,
+  status TEXT NOT NULL,      -- &#039;pending&#039;, &#039;processing&#039;, &#039;completed&#039;, &#039;failed&#039;
+  attempt_count INTEGER DEFAULT 0,
+  started_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  error_message TEXT,
+  PRIMARY KEY (job_id, stage)
+);</code></pre>
+</p>
+
+<h2>Queue Management (pgmq)</h2>
+
+<h3>Enqueue Function</h3>
+
+<pre><code class="language-typescript">// _shared/queue.ts
+<p>
+export async function enqueueJob(
+  queue: &#039;content&#039; | &#039;schema&#039;,
+  jobId: string,
+  stage: string,
+  payload: Record&lt;string, unknown&gt;
+) {
+  const message = {
+    job_id: jobId,
+    stage,
+    payload,
+  }
+</p>
+
+<p>
+  const { error } = await supabaseAdmin.rpc(&#039;enqueue_stage&#039;, {
+    p_queue: queue,
+    p_message: message,
+  })
+</p>
+
+<p>
+  if (error) {
+    console.error(</code>Failed to enqueue ${stage} for job ${jobId}<code>, error)
+    throw error
+  }
+}</code></pre>
+</p>
+
+<h3>Dequeue Function</h3>
+
+<pre><code class="language-typescript">// Used by all workers
+<p>
+const { data, error } = await supabaseAdmin.rpc(&#039;dequeue_stage&#039;, {
+  p_queue: &#039;content&#039;,
+  p_visibility: 600, // Visibility timeout in seconds
+})
+</p>
+
+<p>
+if (!data || data.length === 0) {
+  // No messages in queue
+  return new Response(JSON.stringify({ message: &#039;no messages&#039; }), {
+    status: 204,
+  })
+}
+</p>
+
+<p>
+const { msg_id, message } = data[0]
+const { job_id, stage, payload } = message</code></pre>
+</p>
+
+<h3>Message Visibility Timeout</h3>
+
+<p>
+<strong>Purpose</strong>: Prevents message from being dequeued by another worker while being processed.
+</p>
+
+<ul>
+<li>Default: 600 seconds (10 minutes)</li>
+<li>Configurable via </code>CONTENT_QUEUE_VISIBILITY<code> env var</li>
+<li>If worker doesn't archive message before timeout, it becomes visible again</li>
+<li>Enables automatic retry on worker crashes</li>
+</ul>
+
+<h2>Configuration</h2>
+
+<h3>Environment Variables</h3>
+
+<pre><code class="language-bash">&lt;h1&gt;Queue visibility timeout (seconds)&lt;/h1&gt;
+<p>
+CONTENT_QUEUE_VISIBILITY=600
+</p>
+
+<p>
+&lt;h1&gt;Maximum retry attempts per stage&lt;/h1&gt;
+CONTENT_STAGE_MAX_ATTEMPTS=3
+</p>
+
+<p>
+&lt;h1&gt;Supabase connection (auto-set)&lt;/h1&gt;
+SUPABASE_URL=https://project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+</p>
+
+<p>
+&lt;h1&gt;API keys for content generation&lt;/h1&gt;
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+GROQ_API_KEY=gsk_...</code></pre>
+</p>
+
+<h3>Worker Configuration</h3>
+
+<p>
+Each worker can have custom config.toml:
+</p>
+
+<pre><code class="language-toml">&lt;h1&gt;supabase/functions/content-research-worker/config.toml&lt;/h1&gt;
+<p>
+verify_jwt = false  # No JWT verification for background workers</code></pre>
+</p>
+
+<h2>Performance Considerations</h2>
+
+<h3>Fire-and-Forget Pattern</h3>
+
+<p>
+Workers return immediately (202 Accepted) and run work in background:
+</p>
+
+<pre><code class="language-typescript">// Return response ASAP
+<p>
+const work = (async () =&gt; {
+  // Long-running work here...
+})()
+</p>
+
+<p>
+runBackground(work)
+</p>
+
+<p>
+return new Response(JSON.stringify({ message: &#039;scheduled&#039;, job_id: jobId }), {
+  status: 202,
+})</code></pre>
+</p>
+
+<p>
+<strong>Benefits</strong>:
+</p>
+<ul>
+<li>Avoids Edge Function 60-second timeout</li>
+<li>Allows parallel processing</li>
+<li>Enables automatic retries</li>
+<li>Provides better error handling</li>
+</ul>
+
+<h3>Stage Isolation</h3>
+
+<p>
+Each stage is independent:
+</p>
+<ul>
+<li>Can be developed separately</li>
+<li>Can be deployed independently</li>
+<li>Can be scaled independently</li>
+<li>Failures don't affect other stages</li>
+</ul>
+
+<h3>Message Archiving</h3>
+
+<p>
+Messages are archived (not deleted) for audit trail:
+</p>
+<ul>
+<li>Debugging failed jobs</li>
+<li>Understanding processing patterns</li>
+<li>Monitoring queue health</li>
+<li>Compliance and logging</li>
+</ul>
+
+<h2>Monitoring & Debugging</h2>
+
+<h3>Check Job Status</h3>
+
+<pre><code class="language-sql">-- Get job current state
+<p>
+SELECT id, job_type, status, stage, created_at, updated_at
+FROM content_jobs
+WHERE id = &#039;job-id-here&#039;;
+</p>
+
+<p>
+-- Get all events for a job
+SELECT event_type, message, metadata, created_at
+FROM content_events
+WHERE job_id = &#039;job-id-here&#039;
+ORDER BY created_at DESC;
+</p>
+
+<p>
+-- Get stage execution details
+SELECT stage, status, attempt_count, started_at, completed_at, error_message
+FROM content_stages
+WHERE job_id = &#039;job-id-here&#039;
+ORDER BY started_at;
+</p>
+
+<p>
+-- Get stage payloads
+SELECT stage, data
+FROM content_payloads
+WHERE job_id = &#039;job-id-here&#039;;</code></pre>
+</p>
+
+<h3>Check Queue Health</h3>
+
+<pre><code class="language-sql">-- Check message count in queue
+<p>
+SELECT pgmq.queue_metrics(&#039;content&#039;);
+</p>
+
+<p>
+-- View messages in queue (debugging)
+SELECT <em> FROM pgmq.content_queue
+LIMIT 10;
+</p>
+
+<p>
+-- View archived messages
+SELECT </em> FROM pgmq.content_archive
+ORDER BY archived_at DESC
+LIMIT 10;</code></pre>
+</p>
+
+<h3>Common Issues</h3>
+
+<table>
+<thead>
+<tr>
+<th>Issue</th>
+<th>Symptoms</th>
+<th>Solution</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Worker timeout</td>
+<td>Jobs stuck in processing</td>
+<td>Increase visibility timeout</td>
+</tr>
+<tr>
+<td>All retries exhausted</td>
+<td>Jobs in failed state</td>
+<td>Check error_message in content_stages</td>
+</tr>
+<tr>
+<td>Queue backlog</td>
+<td>High message count</td>
+<td>Scale up worker invocations</td>
+</tr>
+<tr>
+<td>Stage mismatch</td>
+<td>Worker receives wrong stage</td>
+<td>Check stage forwarding logic</td>
+</tr>
+<tr>
+<td>Missing payload</td>
+<td>Worker errors on data access</td>
+<td>Verify previous stage completed</td>
+</tr>
+</tbody>
+</table>
+<h2>Integration Example</h2>
+
+<h3>Creating a Content Generation Job</h3>
+
+<pre><code class="language-typescript">// Client code
+<p>
+async function generateArticle() {
+  const response = await fetch(&#039;https://project.supabase.co/functions/v1/content-intake&#039;, {
+    method: &#039;POST&#039;,
+    headers: {
+      &#039;Content-Type&#039;: &#039;application/json&#039;,
+      &#039;Authorization&#039;: </code>Bearer ${SUPABASE_ANON_KEY}<code>,
+    },
+    body: JSON.stringify({
+      job_type: &#039;article&#039;,
+      requester_email: &#039;user@example.com&#039;,
+      payload: {
+        title: &#039;How to Build a Content Pipeline&#039;,
+        keywords: [&#039;content&#039;, &#039;pipeline&#039;, &#039;automation&#039;],
+        domain: &#039;example.com&#039;,
+        word_count: 2000,
+      },
+    }),
+  })
+</p>
+
+<p>
+  const { job_id } = await response.json()
+  console.log(&#039;Job created:&#039;, job_id)
+</p>
+
+<p>
+  // Poll for completion
+  const interval = setInterval(async () =&gt; {
+    const statusRes = await fetch(</code>https://project.supabase.co/rest/v1/content_jobs?id=eq.${job_id}<code>, {
+      headers: {
+        &#039;Authorization&#039;: </code>Bearer ${SUPABASE_ANON_KEY}`,
+        &#039;apikey&#039;: SUPABASE_ANON_KEY,
+      },
+    })
+</p>
+
+<p>
+    const [job] = await statusRes.json()
+</p>
+
+<p>
+    if (job.status === &#039;completed&#039;) {
+      clearInterval(interval)
+      console.log(&#039;Job completed!&#039;, job)
+    } else if (job.status === &#039;failed&#039;) {
+      clearInterval(interval)
+      console.error(&#039;Job failed&#039;)
+    }
+  }, 5000) // Poll every 5 seconds
+}</code></pre>
+</p>
+
+<h2>Future Enhancements</h2>
+
+<h3>Planned Features</h3>
+<ul>
+<li>[ ] Real research implementation (search APIs, web scraping)</li>
+<li>[ ] AI-powered outline generation</li>
+<li>[ ] Multiple AI providers (Claude, GPT-4, Llama)</li>
+<li>[ ] WordPress publishing integration</li>
+<li>[ ] Shopify publishing integration</li>
+<li>[ ] Schema markup generation</li>
+<li>[ ] Image generation and optimization</li>
+<li>[ ] SEO optimization suggestions</li>
+<li>[ ] A/B testing support</li>
+<li>[ ] Content versioning</li>
+</ul>
+
+<h3>Performance Optimizations</h3>
+<ul>
+<li>[ ] Worker pooling for parallel processing</li>
+<li>[ ] Redis caching for frequently accessed data</li>
+<li>[ ] Batch processing for multiple jobs</li>
+<li>[ ] Priority queue implementation</li>
+<li>[ ] Dead letter queue for failed jobs</li>
+</ul>
+
+<h2>Related Documentation</h2>
+
+<ul>
+<li><a href="./OUTLINE-GENERATION-SYSTEM.md">Outline Generation System</a></li>
+<li><a href="./PAGEPERFECT-SYSTEM.md">PagePerfect System</a></li>
+<li><a href="./GSC-INTEGRATION-SYSTEM.md">GSC Integration</a></li>
+<li><a href="../supabase/functions/MASTER_DEPLOYMENT.md">Deployment Guide</a></li>
+</ul>
+
+    </main>
+
+    <footer class="doc-footer">
+        <p>© 2025 Loud Interactive. All rights reserved.</p>
+        <p class="text-muted">For questions or support, contact: <a href="mailto:support@loud.us">support@loud.us</a></p>
+    </footer>
+</body>
+</html>

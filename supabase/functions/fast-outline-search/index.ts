@@ -84,19 +84,43 @@ serve(async (req) => {
         let pairsData: Record<string, any> = {};
 
         try {
-          const pairsResponse = await fetch(`https://pp-api.replit.app/pairs/all/${jobDetails.domain}`);
-          if (pairsResponse.ok) {
-            pairsData = await pairsResponse.json();
-            console.log(`Retrieved pairs data for ${jobDetails.domain}`);
+          // Call our internal Supabase function instead of external pp-api
+          const pairsResponse = await fetch(`${supabaseUrl}/functions/v1/pp-get-all-pairs?domain=${encodeURIComponent(jobDetails.domain)}`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${supabaseServiceKey}`,
+            },
+          });
 
-            await supabase
-              .from('content_plan_outline_statuses')
-              .insert({
-                outline_guid: job_id,
-                status: 'brand_profile_retrieved'
-              });
+          if (pairsResponse.ok) {
+            const response = await pairsResponse.json();
+            console.log(`Retrieved pairs response for ${jobDetails.domain}`);
+
+            // Transform array of key-value pairs into an object
+            if (response.success && response.data && Array.isArray(response.data)) {
+              pairsData = response.data.reduce((acc: Record<string, any>, pair: any) => {
+                acc[pair.key] = pair.value;
+                return acc;
+              }, {});
+              console.log(`Transformed ${response.data.length} pairs into object`);
+
+              await supabase
+                .from('content_plan_outline_statuses')
+                .insert({
+                  outline_guid: job_id,
+                  status: 'brand_profile_retrieved'
+                });
+            } else {
+              console.log(`No pairs data found, using defaults`);
+              await supabase
+                .from('content_plan_outline_statuses')
+                .insert({
+                  outline_guid: job_id,
+                  status: 'using_default_brand_profile'
+                });
+            }
           } else {
-            console.log(`Pairs API returned ${pairsResponse.status}, using defaults`);
+            console.log(`Pairs function returned ${pairsResponse.status}, using defaults`);
             await supabase
               .from('content_plan_outline_statuses')
               .insert({
@@ -197,7 +221,7 @@ Return JSON only with no extra commentary wrapped in <answer> tags`;
             status: 'parsing_search_results'
           });
 
-        // Extract JSON from response
+        // Extract JSON from response with robust parsing
         const responseText = completion.choices[0].message.content;
         console.log(`Received response of length: ${responseText?.length || 0}`);
 
@@ -205,12 +229,66 @@ Return JSON only with no extra commentary wrapped in <answer> tags`;
           throw new Error('Empty response from Groq API');
         }
 
-        const jsonMatch = responseText.match(/<answer>([\s\S]*?)<\/answer>/);
-        if (!jsonMatch) {
-          throw new Error('No <answer> tags found in Groq response');
+        // Try multiple extraction strategies
+        let jsonText = null;
+        let results = null;
+
+        // Strategy 1: Look for <answer> tags
+        const answerMatch = responseText.match(/<answer>([\s\S]*?)<\/answer>/);
+        if (answerMatch) {
+          jsonText = answerMatch[1].trim();
+          console.log('Found JSON in <answer> tags');
         }
 
-        const results = JSON.parse(jsonMatch[1]);
+        // Strategy 2: Look for JSON code blocks
+        if (!jsonText) {
+          const codeBlockMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+          if (codeBlockMatch) {
+            jsonText = codeBlockMatch[1].trim();
+            console.log('Found JSON in code block');
+          }
+        }
+
+        // Strategy 3: Look for raw JSON object in the response
+        if (!jsonText) {
+          const jsonObjectMatch = responseText.match(/\{[\s\S]*"result"[\s\S]*\}/);
+          if (jsonObjectMatch) {
+            jsonText = jsonObjectMatch[0];
+            console.log('Found raw JSON object');
+          }
+        }
+
+        // Strategy 4: Try to parse the entire response as JSON
+        if (!jsonText) {
+          try {
+            results = JSON.parse(responseText);
+            console.log('Parsed entire response as JSON');
+          } catch (e) {
+            console.error('Failed to parse response as JSON:', e.message);
+          }
+        }
+
+        // Parse the extracted JSON text
+        if (!results && jsonText) {
+          try {
+            results = JSON.parse(jsonText);
+          } catch (parseError) {
+            console.error('Failed to parse extracted JSON:', parseError.message);
+            console.error('Extracted text:', jsonText.substring(0, 500));
+            throw new Error(`Failed to parse JSON from Groq response: ${parseError.message}`);
+          }
+        }
+
+        // Validate we got results
+        if (!results) {
+          console.error('Response text (first 1000 chars):', responseText.substring(0, 1000));
+          throw new Error('Could not extract valid JSON from Groq response');
+        }
+
+        if (!results.result || !Array.isArray(results.result)) {
+          throw new Error('Response does not contain valid "result" array');
+        }
+
         console.log(`Parsed ${results.result.length} search results`);
 
         // Save results to database
