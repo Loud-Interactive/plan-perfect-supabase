@@ -1,0 +1,4 @@
+# Configuration for generate-side-by-side edge function
+# Disable JWT verification to allow public access
+
+verify_jwt = false
