@@ -170,15 +170,38 @@ serve(async (req) => {
             status: 'initiating_intelligent_search'
           });
 
-        const prompt = `Use the browser_search tool to gather the top 10 authoritative results for "${jobDetails.post_keyword}" ensure that the article is actually about the topic and not just generic articles ensure that you keep in this brand information in mind when performing these searches
+        const prompt = `Use web search to find the top 10 authoritative articles about "${jobDetails.post_keyword}".
 
+Brand Context:
 ${JSON.stringify(brandProfile, null, 2)}
 
-If the articles you find don't relate to the core of the brand you can determine other search terms and use those
+Search for high-quality articles specifically about "${jobDetails.post_keyword}". Ensure articles are relevant to the brand context above.
 
-For each result, capture the title, canonical link, full markdown content, all H1-H4 headings, a concise summary, and an array of quotes with citation URLs. After gathering the information, respond with a single JSON object that matches this schema: { "type": "object", "properties": { "result": { "type": "array", "items": { "type": "object", "properties": { "index": { "type": "integer" }, "title": { "type": "string" }, "link": { "type": "string" }, "markdown": { "type": "string" }, "headings": { "type": "array", "items": { "type": "string" }, "minItems": 1 }, "summary": { "type": "string" }, "quotes": { "type": "array", "items": { "type": "object", "properties": { "text": { "type": "string" }, "citation": { "type": "string" } }, "required": [ "text", "citation" ], "additionalProperties": false }, "minItems": 1 } }, "required": [ "index", "title", "link", "markdown", "headings", "summary", "quotes" ], "additionalProperties": false }, "minItems": 1 } }, "required": [ "result" ], "additionalProperties": false }
+For each search result, extract and return the following in JSON format:
+- index (0-9)
+- title
+- link (URL)
+- markdown (full article content)
+- headings (array of H1-H4 headings)
+- summary (2-3 sentences)
+- quotes (array of notable quotes with citations)
 
-Return JSON only with no extra commentary wrapped in <answer> tags`;
+CRITICAL: Return ONLY valid JSON in this EXACT structure:
+{
+  "result": [
+    {
+      "index": 0,
+      "title": "Article Title",
+      "link": "https://example.com/article",
+      "markdown": "Full article content in markdown",
+      "headings": ["Heading 1", "Heading 2"],
+      "summary": "Article summary",
+      "quotes": [{"text": "Quote text", "citation": "https://source.com"}]
+    }
+  ]
+}
+
+Return all 10 results (index 0-9). Response must be valid JSON only - no explanatory text, no apologies, no markdown code blocks.`;
 
         // Call Groq API
         console.log('Calling Groq API with browser_search tool');
@@ -194,25 +217,141 @@ Return JSON only with no extra commentary wrapped in <answer> tags`;
           apiKey: Deno.env.get('GROQ_API_KEY') || '',
         });
 
-        const completion = await groq.chat.completions.create({
-          model: "openai/gpt-oss-120b",
-          messages: [
-            {
-              role: "user",
-              content: prompt
-            }
-          ],
-          temperature: 1,
-          max_completion_tokens: 65536,
-          top_p: 1,
-          reasoning_effort: "medium",
-          stream: false,
-          tools: [
-            { type: "browser_search" }
-          ]
-        });
+        // Retry logic with exponential backoff
+        let fullResponse = '';
+        let collectedToolCalls: any[] = [];
+        const maxRetries = 3;
+        let attempt = 0;
+        let lastError: any = null;
 
-        console.log('Groq API call completed');
+        while (attempt < maxRetries) {
+          try {
+            attempt++;
+            console.log(`Groq API call attempt ${attempt}/${maxRetries}...`);
+
+            await supabase
+              .from('content_plan_outline_statuses')
+              .insert({
+                outline_guid: job_id,
+                status: `groq_attempt_${attempt}`
+              });
+
+            // Use streaming with browser_search tool
+            // Add stronger instructions on retries
+            let attemptPrompt = prompt;
+            let useJsonMode = false; // Can't use json_object mode with tools
+
+            if (attempt > 1) {
+              attemptPrompt = `${prompt}\n\nATTENPT ${attempt}/3: Previous attempt failed. You MUST use web search and return valid JSON. Do not apologize, do not explain why you can't - just search and return the JSON structure requested.`;
+            }
+
+            const requestConfig: any = {
+              model: "openai/gpt-oss-120b",
+              messages: [
+                {
+                  role: "system",
+                  content: "You have web search capabilities. Use them to find articles, then return results as valid JSON only. Never refuse the task."
+                },
+                {
+                  role: "user",
+                  content: attemptPrompt
+                }
+              ],
+              temperature: 0.7,
+              max_completion_tokens: 65536,
+              top_p: 1,
+              reasoning_effort: "medium",
+              stream: true,
+              tools: [
+                { type: "browser_search" }
+              ]
+            };
+
+            // Only use json_object mode if not using tools (can't combine them)
+            // if (useJsonMode) {
+            //   requestConfig.response_format = { type: "json_object" };
+            // }
+
+            console.log(`Attempt ${attempt}: Calling Groq with browser_search tool...`);
+            const stream = await groq.chat.completions.create(requestConfig);
+
+            console.log('Groq streaming started...');
+
+            fullResponse = '';
+            collectedToolCalls = [];
+            let chunkCount = 0;
+            let toolCallsDetected = false;
+
+            for await (const chunk of stream) {
+              chunkCount++;
+
+              if (chunk.choices && chunk.choices.length > 0) {
+                const delta = chunk.choices[0].delta;
+
+                // Collect content
+                if (delta?.content) {
+                  fullResponse += delta.content;
+                }
+
+                // Collect tool calls (browser_search results might come via tool_calls)
+                if (delta?.tool_calls) {
+                  toolCallsDetected = true;
+                  for (const toolCall of delta.tool_calls) {
+                    const index = toolCall.index || 0;
+                    if (!collectedToolCalls[index]) {
+                      collectedToolCalls[index] = {
+                        id: toolCall.id || '',
+                        type: toolCall.type || 'function',
+                        function: { name: '', arguments: '' }
+                      };
+                    }
+                    if (toolCall.function?.name) {
+                      collectedToolCalls[index].function.name += toolCall.function.name;
+                    }
+                    if (toolCall.function?.arguments) {
+                      collectedToolCalls[index].function.arguments += toolCall.function.arguments;
+                    }
+                  }
+                }
+              }
+            }
+
+            console.log(`Streaming completed. Chunks: ${chunkCount}, Content: ${fullResponse.length} chars, Tool calls: ${collectedToolCalls.length}`);
+
+            // If we got tool_calls but no content, extract from tool_calls
+            if (toolCallsDetected && !fullResponse && collectedToolCalls.length > 0) {
+              console.log('Response came via tool_calls, extracting...');
+              const toolCall = collectedToolCalls[0];
+              if (toolCall?.function?.arguments) {
+                fullResponse = toolCall.function.arguments;
+                console.log(`Extracted ${fullResponse.length} chars from tool_calls`);
+              }
+            }
+
+            // If we got content, break out of retry loop
+            if (fullResponse && fullResponse.length > 100) {
+              console.log('✅ Successfully received response from Groq');
+              break;
+            } else {
+              throw new Error(`Received empty or too short response (${fullResponse.length} chars)`);
+            }
+
+          } catch (error) {
+            lastError = error;
+            console.error(`Attempt ${attempt} failed:`, error.message);
+
+            if (attempt < maxRetries) {
+              const backoffMs = Math.min(1000 * Math.pow(2, attempt), 10000);
+              console.log(`Retrying in ${backoffMs}ms...`);
+              await new Promise(resolve => setTimeout(resolve, backoffMs));
+            }
+          }
+        }
+
+        // If all retries failed, throw the last error
+        if (!fullResponse || fullResponse.length < 100) {
+          throw new Error(`Failed after ${maxRetries} attempts. Last error: ${lastError?.message || 'Unknown error'}`);
+        }
 
         await supabase
           .from('content_plan_outline_statuses')
@@ -221,73 +360,101 @@ Return JSON only with no extra commentary wrapped in <answer> tags`;
             status: 'parsing_search_results'
           });
 
-        // Extract JSON from response with robust parsing
-        const responseText = completion.choices[0].message.content;
-        console.log(`Received response of length: ${responseText?.length || 0}`);
+        // Use the fullResponse directly
+        const responseText = fullResponse;
+        console.log(`Processing response of length: ${responseText.length}`);
 
-        if (!responseText) {
-          throw new Error('Empty response from Groq API');
-        }
-
-        // Try multiple extraction strategies
+        // Try multiple extraction strategies with smart error detection
         let jsonText = null;
         let results = null;
+        let parseError = null;
 
-        // Strategy 1: Look for <answer> tags
-        const answerMatch = responseText.match(/<answer>([\s\S]*?)<\/answer>/);
-        if (answerMatch) {
-          jsonText = answerMatch[1].trim();
-          console.log('Found JSON in <answer> tags');
+        // Check for refusal patterns first
+        const refusalPatterns = [
+          "I'm unable",
+          "I cannot",
+          "I can't",
+          "I do not have",
+          "I don't have",
+          "As an AI"
+        ];
+
+        const hasRefusal = refusalPatterns.some(pattern =>
+          responseText.toLowerCase().includes(pattern.toLowerCase())
+        );
+
+        if (hasRefusal) {
+          console.error('❌ Model refused the task. Response:', responseText.substring(0, 200));
+          await supabase
+            .from('content_plan_outline_statuses')
+            .insert({
+              outline_guid: job_id,
+              status: 'groq_refused_task_retrying'
+            });
+          throw new Error('Model refused to generate results. Will retry with stronger instructions.');
         }
 
-        // Strategy 2: Look for JSON code blocks
-        if (!jsonText) {
+        // Strategy 1: Try to parse entire response (should work with json_object mode)
+        try {
+          results = JSON.parse(responseText);
+          console.log('✅ Parsed entire response as JSON');
+        } catch (e) {
+          parseError = e;
+          console.log('Strategy 1 failed:', e.message);
+        }
+
+        // Strategy 2: Look for JSON code blocks (in case model wrapped it)
+        if (!results) {
           const codeBlockMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
           if (codeBlockMatch) {
-            jsonText = codeBlockMatch[1].trim();
-            console.log('Found JSON in code block');
+            try {
+              jsonText = codeBlockMatch[1].trim();
+              results = JSON.parse(jsonText);
+              console.log('✅ Found and parsed JSON from code block');
+            } catch (e) {
+              console.log('Strategy 2 failed:', e.message);
+            }
           }
         }
 
-        // Strategy 3: Look for raw JSON object in the response
-        if (!jsonText) {
+        // Strategy 3: Look for raw JSON object
+        if (!results) {
           const jsonObjectMatch = responseText.match(/\{[\s\S]*"result"[\s\S]*\}/);
           if (jsonObjectMatch) {
-            jsonText = jsonObjectMatch[0];
-            console.log('Found raw JSON object');
+            try {
+              jsonText = jsonObjectMatch[0];
+              results = JSON.parse(jsonText);
+              console.log('✅ Found and parsed raw JSON object');
+            } catch (e) {
+              console.log('Strategy 3 failed:', e.message);
+            }
           }
         }
 
-        // Strategy 4: Try to parse the entire response as JSON
-        if (!jsonText) {
-          try {
-            results = JSON.parse(responseText);
-            console.log('Parsed entire response as JSON');
-          } catch (e) {
-            console.error('Failed to parse response as JSON:', e.message);
-          }
-        }
-
-        // Parse the extracted JSON text
-        if (!results && jsonText) {
-          try {
-            results = JSON.parse(jsonText);
-          } catch (parseError) {
-            console.error('Failed to parse extracted JSON:', parseError.message);
-            console.error('Extracted text:', jsonText.substring(0, 500));
-            throw new Error(`Failed to parse JSON from Groq response: ${parseError.message}`);
-          }
-        }
-
-        // Validate we got results
+        // If all strategies failed, log detailed error and throw
         if (!results) {
-          console.error('Response text (first 1000 chars):', responseText.substring(0, 1000));
-          throw new Error('Could not extract valid JSON from Groq response');
+          console.error('❌ ALL JSON PARSING STRATEGIES FAILED');
+          console.error('Parse error:', parseError?.message || 'No parse error captured');
+          console.error('Response preview:', responseText.substring(0, 500));
+          console.error('Response ends with:', responseText.substring(responseText.length - 100));
+
+          await supabase
+            .from('content_plan_outline_statuses')
+            .insert({
+              outline_guid: job_id,
+              status: `json_parse_failed_retrying`
+            });
+
+          throw new Error(`Could not parse JSON from Groq response. Parse error: ${parseError?.message}. Response starts with: ${responseText.substring(0, 100)}`);
         }
 
+        // Validate structure
         if (!results.result || !Array.isArray(results.result)) {
+          console.error('❌ Invalid JSON structure. Got:', Object.keys(results));
           throw new Error('Response does not contain valid "result" array');
         }
+
+        console.log(`✅ Successfully parsed ${results.result.length} search results`);
 
         console.log(`Parsed ${results.result.length} search results`);
 
@@ -363,8 +530,9 @@ Return JSON only with no extra commentary wrapped in <answer> tags`;
             await supabase
               .from('outline_generation_jobs')
               .update({
-                status: 'fast_search_failed',
-                updated_at: new Date().toISOString()
+                status: 'failed',
+                updated_at: new Date().toISOString(),
+                heartbeat: new Date().toISOString()
               })
               .eq('id', job_id);
 
@@ -402,8 +570,9 @@ Return JSON only with no extra commentary wrapped in <answer> tags`;
         await supabase
           .from('outline_generation_jobs')
           .update({
-            status: 'fast_search_failed',
-            updated_at: new Date().toISOString()
+            status: 'failed',
+            updated_at: new Date().toISOString(),
+            heartbeat: new Date().toISOString()
           })
           .eq('id', job_id);
       } catch (updateError) {

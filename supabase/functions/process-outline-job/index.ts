@@ -394,24 +394,33 @@ Respond with a JSON structure containing these three sets of search terms. Forma
             ]
           };
           
-          // Save the simple outline
+          // Save the simple outline (both tables)
+          await supabase
+            .from('content_plan_outlines')
+            .update({
+              outline: JSON.stringify(simpleOutline),
+              status: 'completed',
+              updated_at: new Date().toISOString()
+            })
+            .eq('guid', job_id);
+
           await supabase
             .from('content_plan_outlines_ai')
             .insert({
               job_id,
               outline: simpleOutline
             });
-            
+
           // Update job status to completed with heartbeat
           await supabase
             .from('outline_generation_jobs')
-            .update({ 
+            .update({
               status: 'completed',
               updated_at: new Date().toISOString(),
               heartbeat: new Date().toISOString()
             })
             .eq('id', job_id);
-            
+
           console.log('Outline generation completed with fallback approach');
           return;
         }
@@ -657,20 +666,36 @@ Format your response as a JSON object with this structure:
           console.log('Created simplified outline');
         }
 
-        // Step 12: Create outline in database
+        // Step 12: Save outline to database (both tables)
         console.log('Saving outline to database');
+
+        // Update content_plan_outlines with the outline
         await supabase
-          .from('content_plan_outlines_ai')
-          .insert({
-            job_id,
-            content_plan_outline_guid: job_id,
-            outline: outlineJson
-          });
+          .from('content_plan_outlines')
+          .update({
+            outline: JSON.stringify(outlineJson),
+            status: 'completed',
+            updated_at: new Date().toISOString()
+          })
+          .eq('guid', job_id);
+
+        // Try to insert into content_plan_outlines_ai (optional - for history)
+        try {
+          await supabase
+            .from('content_plan_outlines_ai')
+            .insert({
+              job_id,
+              outline: outlineJson
+            });
+          console.log('Saved outline to content_plan_outlines_ai');
+        } catch (aiError) {
+          console.warn('Warning: Could not insert into content_plan_outlines_ai (non-critical):', aiError);
+        }
 
         // Step 13: Update job status to completed with heartbeat
         await supabase
           .from('outline_generation_jobs')
-          .update({ 
+          .update({
             status: 'completed',
             updated_at: new Date().toISOString(),
             heartbeat: new Date().toISOString()

@@ -26,22 +26,37 @@ export async function queueWebhookEvent(
   metadata?: any
 ): Promise<void> {
   try {
+    // Extract task_id from data to use as the webhook event id
+    // This ensures we can upsert (update or insert) safely
+    const taskId = data?.task_id || metadata?.task_id;
+
+    const webhookEvent: any = {
+      event_type: event,
+      payload: {
+        ...data,
+        metadata
+      },
+      domain,
+      processed: false
+    };
+
+    // If we have a task_id, use it as the id for upsert to prevent duplicates
+    if (taskId) {
+      webhookEvent.id = taskId;
+    }
+
+    // Use upsert instead of insert to handle retries gracefully
+    // onConflict: 'id' means if a row with this id exists, update it
     const { error } = await supabase
       .from('webhook_events_queue')
-      .insert({
-        event_type: event,
-        payload: {
-          ...data,
-          metadata
-        },
-        domain,
-        processed: false
+      .upsert(webhookEvent, {
+        onConflict: 'id'
       });
 
     if (error) {
       console.error("Failed to queue webhook event:", error);
     } else {
-      console.log(`Queued webhook event: ${event} for domain: ${domain}`);
+      console.log(`Queued webhook event: ${event} for domain: ${domain} (task_id: ${taskId || 'N/A'})`);
     }
   } catch (error) {
     console.error("Error queuing webhook event:", error);

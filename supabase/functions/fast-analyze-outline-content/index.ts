@@ -255,22 +255,24 @@ ${researchContext}
 8. Structure should be logical and flow naturally${restrictionNotes}
 
 **OUTPUT FORMAT**:
-Return a JSON object with this exact structure wrapped in <answer> tags:
+Return ONLY a valid JSON object matching this exact structure:
 {
   "title": "${jobDetails.post_title}",
   "sections": [
     {
-      "title": "Section 1 Title (H2)",
-      "subheadings": ["Subsection 1.1 (H3)", "Subsection 1.2 (H3)", "Subsection 1.3 (H3)"]
+      "title": "Section 1 Title",
+      "subheadings": ["Subsection 1.1", "Subsection 1.2", "Subsection 1.3"]
     },
     {
-      "title": "Section 2 Title (H2)",
-      "subheadings": ["Subsection 2.1 (H3)", "Subsection 2.2 (H3)", "Subsection 2.3 (H3)", "Subsection 2.4 (H3)"]
+      "title": "Section 2 Title",
+      "subheadings": ["Subsection 2.1", "Subsection 2.2", "Subsection 2.3", "Subsection 2.4"]
     }
   ]
 }
 
-Return JSON only with no extra commentary wrapped in <answer> tags.`;
+CRITICAL: Do NOT include (H2), (H3), or any heading level markers in the title or subheadings text. We handle heading levels automatically. Just provide clean, descriptive titles.
+
+IMPORTANT: Return ONLY the JSON object. Do not wrap in markdown code blocks, do not add commentary, do not use XML tags.`;
 
         // Step 6: Call Groq API
         console.log('Calling Groq API for outline generation');
@@ -286,22 +288,93 @@ Return JSON only with no extra commentary wrapped in <answer> tags.`;
           apiKey: Deno.env.get('GROQ_API_KEY') || '',
         });
 
-        const completion = await groq.chat.completions.create({
-          model: "openai/gpt-oss-120b",
-          messages: [
-            {
-              role: "user",
-              content: prompt
-            }
-          ],
-          temperature: 1,
-          max_completion_tokens: 16384,
-          top_p: 1,
-          reasoning_effort: "medium",
-          stream: false,
-        });
+        // Retry logic with exponential backoff
+        let fullResponse = '';
+        const maxRetries = 3;
+        let attempt = 0;
+        let lastError: any = null;
 
-        console.log('Groq API call completed');
+        while (attempt < maxRetries) {
+          try {
+            attempt++;
+            console.log(`Groq API call attempt ${attempt}/${maxRetries}...`);
+
+            await supabase
+              .from('content_plan_outline_statuses')
+              .insert({
+                outline_guid: job_id,
+                status: `groq_outline_attempt_${attempt}`
+              });
+
+            // Use streaming with JSON mode and retry improvements
+            let attemptPrompt = prompt;
+            if (attempt > 1) {
+              attemptPrompt = `${prompt}\n\nATTEMPT ${attempt}: You previously failed to return valid JSON. This time you MUST return ONLY valid JSON with NO explanatory text. Start with { and end with }.`;
+            }
+
+            const stream = await groq.chat.completions.create({
+              model: "openai/gpt-oss-120b",
+              messages: [
+                {
+                  role: "system",
+                  content: "You are a JSON-only API. Respond ONLY with valid JSON. Never add explanatory text."
+                },
+                {
+                  role: "user",
+                  content: attemptPrompt
+                }
+              ],
+              temperature: 0.7,
+              max_completion_tokens: 16384,
+              top_p: 1,
+              reasoning_effort: "medium",
+              stream: true,
+              response_format: { type: "json_object" }
+            });
+
+            console.log('Groq streaming started...');
+
+            fullResponse = '';
+            let chunkCount = 0;
+
+            for await (const chunk of stream) {
+              chunkCount++;
+
+              if (chunk.choices && chunk.choices.length > 0) {
+                const delta = chunk.choices[0].delta;
+
+                if (delta?.content) {
+                  fullResponse += delta.content;
+                }
+              }
+            }
+
+            console.log(`Streaming completed. Chunks: ${chunkCount}, Content length: ${fullResponse.length}`);
+
+            // If we got content, break out of retry loop
+            if (fullResponse && fullResponse.length > 100) {
+              console.log('✅ Successfully received outline response from Groq');
+              break;
+            } else {
+              throw new Error(`Received empty or too short response (${fullResponse.length} chars)`);
+            }
+
+          } catch (error) {
+            lastError = error;
+            console.error(`Attempt ${attempt} failed:`, error.message);
+
+            if (attempt < maxRetries) {
+              const backoffMs = Math.min(1000 * Math.pow(2, attempt), 10000);
+              console.log(`Retrying in ${backoffMs}ms...`);
+              await new Promise(resolve => setTimeout(resolve, backoffMs));
+            }
+          }
+        }
+
+        // If all retries failed, throw the last error
+        if (!fullResponse || fullResponse.length < 100) {
+          throw new Error(`Failed after ${maxRetries} attempts. Last error: ${lastError?.message || 'Unknown error'}`);
+        }
 
         await supabase
           .from('content_plan_outline_statuses')
@@ -311,76 +384,103 @@ Return JSON only with no extra commentary wrapped in <answer> tags.`;
           });
 
         // Step 7: Parse response with robust extraction
-        const responseText = completion.choices[0].message.content;
-        console.log(`Received response of length: ${responseText?.length || 0}`);
+        const responseText = fullResponse;
+        console.log(`Processing response of length: ${responseText.length}`);
 
-        if (!responseText) {
-          throw new Error('Empty response from Groq API');
-        }
-
-        // Try multiple extraction strategies
+        // Try multiple extraction strategies with smart error detection
         let jsonText = null;
         let outlineJson = null;
+        let parseError = null;
 
-        // Strategy 1: Look for <answer> tags
-        const answerMatch = responseText.match(/<answer>([\s\S]*?)<\/answer>/);
-        if (answerMatch) {
-          jsonText = answerMatch[1].trim();
-          console.log('Found JSON in <answer> tags');
+        // Check for refusal patterns
+        const refusalPatterns = [
+          "I'm unable",
+          "I cannot",
+          "I can't",
+          "I do not have",
+          "I don't have",
+          "As an AI"
+        ];
+
+        const hasRefusal = refusalPatterns.some(pattern =>
+          responseText.toLowerCase().includes(pattern.toLowerCase())
+        );
+
+        if (hasRefusal) {
+          console.error('❌ Model refused the task. Response:', responseText.substring(0, 200));
+          await supabase
+            .from('content_plan_outline_statuses')
+            .insert({
+              outline_guid: job_id,
+              status: 'groq_refused_outline_retrying'
+            });
+          throw new Error('Model refused to generate outline. Will retry with stronger instructions.');
+        }
+
+        // Strategy 1: Parse entire response (should work with json_object mode)
+        try {
+          outlineJson = JSON.parse(responseText);
+          console.log('✅ Parsed entire response as JSON');
+        } catch (e) {
+          parseError = e;
+          console.log('Strategy 1 failed:', e.message);
         }
 
         // Strategy 2: Look for JSON code blocks
-        if (!jsonText) {
+        if (!outlineJson) {
           const codeBlockMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
           if (codeBlockMatch) {
-            jsonText = codeBlockMatch[1].trim();
-            console.log('Found JSON in code block');
+            try {
+              jsonText = codeBlockMatch[1].trim();
+              outlineJson = JSON.parse(jsonText);
+              console.log('✅ Found and parsed JSON from code block');
+            } catch (e) {
+              console.log('Strategy 2 failed:', e.message);
+            }
           }
         }
 
-        // Strategy 3: Look for raw JSON object in the response
-        if (!jsonText) {
+        // Strategy 3: Look for raw JSON object
+        if (!outlineJson) {
           const jsonObjectMatch = responseText.match(/\{[\s\S]*"sections"[\s\S]*\}/);
           if (jsonObjectMatch) {
-            jsonText = jsonObjectMatch[0];
-            console.log('Found raw JSON object');
+            try {
+              jsonText = jsonObjectMatch[0];
+              outlineJson = JSON.parse(jsonText);
+              console.log('✅ Found and parsed raw JSON object');
+            } catch (e) {
+              console.log('Strategy 3 failed:', e.message);
+            }
           }
         }
 
-        // Strategy 4: Try to parse the entire response as JSON
-        if (!jsonText) {
-          try {
-            outlineJson = JSON.parse(responseText);
-            console.log('Parsed entire response as JSON');
-          } catch (e) {
-            console.error('Failed to parse response as JSON:', e.message);
-          }
-        }
-
-        // Parse the extracted JSON text
-        if (!outlineJson && jsonText) {
-          try {
-            outlineJson = JSON.parse(jsonText);
-          } catch (parseError) {
-            console.error('Failed to parse extracted JSON:', parseError.message);
-            console.error('Extracted text:', jsonText.substring(0, 500));
-            throw new Error(`Failed to parse JSON from Groq response: ${parseError.message}`);
-          }
-        }
-
-        // Validate we got an outline
+        // If all strategies failed
         if (!outlineJson) {
-          console.error('Response text (first 1000 chars):', responseText.substring(0, 1000));
-          throw new Error('Could not extract valid JSON from Groq response');
+          console.error('❌ ALL JSON PARSING STRATEGIES FAILED');
+          console.error('Parse error:', parseError?.message || 'No parse error captured');
+          console.error('Response preview:', responseText.substring(0, 500));
+
+          await supabase
+            .from('content_plan_outline_statuses')
+            .insert({
+              outline_guid: job_id,
+              status: `outline_json_parse_failed_retrying`
+            });
+
+          throw new Error(`Could not parse outline JSON. Parse error: ${parseError?.message}. Response starts with: ${responseText.substring(0, 100)}`);
         }
 
+        // Validate structure
         if (!outlineJson.sections || !Array.isArray(outlineJson.sections)) {
+          console.error('❌ Invalid JSON structure. Got:', Object.keys(outlineJson));
           throw new Error('Response does not contain valid "sections" array');
         }
 
+        console.log(`✅ Successfully parsed outline with ${outlineJson.sections.length} sections`);
+
         console.log(`Parsed outline with ${outlineJson.sections.length} sections`);
 
-        // Step 8: Save outline to database
+        // Step 8: Save outline to database (proper flow with both tables)
         console.log('Saving outline to database');
 
         await supabase
@@ -390,32 +490,60 @@ Return JSON only with no extra commentary wrapped in <answer> tags.`;
             status: 'saving_outline'
           });
 
-        // Insert into content_plan_outlines_ai
-        await supabase
-          .from('content_plan_outlines_ai')
-          .insert({
-            job_id,
-            outline: outlineJson
-          });
-
-        // Update content_plan_outlines
-        await supabase
+        // Step 8a: Update content_plan_outlines with the outline (this record should already exist)
+        const { data: updateResult, error: updateOutlineError } = await supabase
           .from('content_plan_outlines')
           .update({
             outline: JSON.stringify(outlineJson),
             status: 'completed',
             updated_at: new Date().toISOString()
           })
-          .eq('guid', job_id);
+          .eq('guid', job_id)
+          .select();
 
-        // Update job status to completed
-        await supabase
+        if (updateOutlineError) {
+          console.error('Error updating content_plan_outlines:', updateOutlineError);
+          throw new Error(`Failed to update content_plan_outlines: ${updateOutlineError.message}`);
+        }
+
+        console.log('✅ Updated content_plan_outlines with outline', updateResult ? `(${updateResult.length} rows)` : '(no rows returned)');
+
+        // Step 8b: Try to insert into content_plan_outlines_ai (optional - for history)
+        try {
+          const { error: insertError } = await supabase
+            .from('content_plan_outlines_ai')
+            .insert({
+              job_id,
+              outline: outlineJson
+            });
+
+          if (insertError) {
+            console.warn('Warning: Could not insert into content_plan_outlines_ai (non-critical):', insertError.message);
+            // Don't throw - this table is just for history, content_plan_outlines is the main table
+          } else {
+            console.log('✅ Saved outline to content_plan_outlines_ai');
+          }
+        } catch (aiInsertError) {
+          console.warn('Warning: Exception inserting into content_plan_outlines_ai (non-critical):', aiInsertError.message);
+          // Continue - content_plan_outlines is already updated
+        }
+
+        // Step 8c: Update job status to completed
+        const { error: updateError } = await supabase
           .from('outline_generation_jobs')
           .update({
             status: 'completed',
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            heartbeat: new Date().toISOString()
           })
           .eq('id', job_id);
+
+        if (updateError) {
+          console.error('Error updating outline_generation_jobs:', updateError);
+          throw new Error(`Failed to update job status: ${updateError.message}`);
+        }
+
+        console.log('✅ Updated outline_generation_jobs status to completed');
 
         await supabase
           .from('content_plan_outline_statuses')
@@ -424,7 +552,7 @@ Return JSON only with no extra commentary wrapped in <answer> tags.`;
             status: 'completed'
           });
 
-        console.log('Fast outline analysis completed successfully');
+        console.log('✅ Fast outline analysis completed successfully');
 
       } catch (backgroundError) {
         console.error('Error in fast analysis processing:', backgroundError);
@@ -435,8 +563,9 @@ Return JSON only with no extra commentary wrapped in <answer> tags.`;
             await supabase
               .from('outline_generation_jobs')
               .update({
-                status: 'fast_analysis_failed',
-                updated_at: new Date().toISOString()
+                status: 'failed',
+                updated_at: new Date().toISOString(),
+                heartbeat: new Date().toISOString()
               })
               .eq('id', job_id);
 
@@ -474,8 +603,9 @@ Return JSON only with no extra commentary wrapped in <answer> tags.`;
         await supabase
           .from('outline_generation_jobs')
           .update({
-            status: 'fast_analysis_failed',
-            updated_at: new Date().toISOString()
+            status: 'failed',
+            updated_at: new Date().toISOString(),
+            heartbeat: new Date().toISOString()
           })
           .eq('id', job_id);
       } catch (updateError) {
