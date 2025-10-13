@@ -81,7 +81,7 @@ serve(async (req) => {
           .update({ 
             status: 'determining_search_terms', 
             updated_at: new Date().toISOString(),
-            heartbeat: new Date().toISOString()
+            heartbeat_at: new Date().toISOString()
           })
           .eq('id', job_id);
 
@@ -220,7 +220,7 @@ Respond with a JSON structure containing these three sets of search terms. Forma
           .update({ 
             status: 'running_searches',
             updated_at: new Date().toISOString(),
-            heartbeat: new Date().toISOString()
+            heartbeat_at: new Date().toISOString()
           })
           .eq('id', job_id);
 
@@ -343,7 +343,7 @@ Respond with a JSON structure containing these three sets of search terms. Forma
           .update({ 
             status: 'analyzing_results',
             updated_at: new Date().toISOString(),
-            heartbeat: new Date().toISOString()
+            heartbeat_at: new Date().toISOString()
           })
           .eq('id', job_id);
 
@@ -417,7 +417,7 @@ Respond with a JSON structure containing these three sets of search terms. Forma
             .update({
               status: 'completed',
               updated_at: new Date().toISOString(),
-              heartbeat: new Date().toISOString()
+              heartbeat_at: new Date().toISOString()
             })
             .eq('id', job_id);
 
@@ -517,7 +517,7 @@ Respond with a JSON structure containing these three sets of search terms. Forma
           .update({ 
             status: 'generating_outline',
             updated_at: new Date().toISOString(),
-            heartbeat: new Date().toISOString()
+            heartbeat_at: new Date().toISOString()
           })
           .eq('id', job_id);
 
@@ -698,7 +698,7 @@ Format your response as a JSON object with this structure:
           .update({
             status: 'completed',
             updated_at: new Date().toISOString(),
-            heartbeat: new Date().toISOString()
+            heartbeat_at: new Date().toISOString()
           })
           .eq('id', job_id);
 
@@ -716,7 +716,7 @@ Format your response as a JSON object with this structure:
                 status: 'failed',
                 error: backgroundError.message,
                 updated_at: new Date().toISOString(),
-                heartbeat: new Date().toISOString()
+                heartbeat_at: new Date().toISOString()
               })
               .eq('id', job_id);
               
@@ -753,7 +753,7 @@ Format your response as a JSON object with this structure:
             status: 'failed',
             error: error.message,
             updated_at: new Date().toISOString(),
-            heartbeat: new Date().toISOString()
+            heartbeat_at: new Date().toISOString()
           })
           .eq('id', job_id);
           

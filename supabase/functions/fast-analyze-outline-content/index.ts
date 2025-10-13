@@ -534,7 +534,7 @@ IMPORTANT: Return ONLY the JSON object. Do not wrap in markdown code blocks, do 
           .update({
             status: 'completed',
             updated_at: new Date().toISOString(),
-            heartbeat: new Date().toISOString()
+            heartbeat_at: new Date().toISOString()
           })
           .eq('id', job_id);
 
@@ -565,7 +565,7 @@ IMPORTANT: Return ONLY the JSON object. Do not wrap in markdown code blocks, do 
               .update({
                 status: 'failed',
                 updated_at: new Date().toISOString(),
-                heartbeat: new Date().toISOString()
+                heartbeat_at: new Date().toISOString()
               })
               .eq('id', job_id);
 
@@ -605,7 +605,7 @@ IMPORTANT: Return ONLY the JSON object. Do not wrap in markdown code blocks, do 
           .update({
             status: 'failed',
             updated_at: new Date().toISOString(),
-            heartbeat: new Date().toISOString()
+            heartbeat_at: new Date().toISOString()
           })
           .eq('id', job_id);
       } catch (updateError) {
