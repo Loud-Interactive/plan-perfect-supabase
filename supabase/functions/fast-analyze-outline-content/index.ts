@@ -215,6 +215,12 @@ serve(async (req) => {
           return context;
         }).join('\n---\n');
 
+        // Check for introduction/conclusion preferences in pairs
+        const includeIntroduction = pairsData.include_introduction === 'true' || pairsData.include_introduction === true;
+        const includeConclusion = pairsData.include_conclusion === 'true' || pairsData.include_conclusion === true;
+
+        console.log(`Outline preferences: include_introduction=${includeIntroduction}, include_conclusion=${includeConclusion}`);
+
         // Build restriction notes
         let restrictionNotes = '';
         if (brandProfile.avoid_topics) {
@@ -225,6 +231,18 @@ serve(async (req) => {
         }
         if (brandProfile.competitor_domains) {
           restrictionNotes += `\n\n**DO NOT CITE THESE DOMAINS**: ${brandProfile.competitor_domains}`;
+        }
+
+        // Build sections requirement based on intro/conclusion preferences
+        let sectionsRequirement = '';
+        if (includeIntroduction && includeConclusion) {
+          sectionsRequirement = '1. Create an Introduction section (H2 heading)\n2. Create 4-5 main content sections (H2 headings)\n3. Create a Conclusion section (H2 heading)\n4. Each main content section should have 3-4 subsections (H3 headings)';
+        } else if (includeIntroduction && !includeConclusion) {
+          sectionsRequirement = '1. Create an Introduction section (H2 heading)\n2. Create 4-5 main content sections (H2 headings)\n3. **DO NOT** include a Conclusion section\n4. Each main content section should have 3-4 subsections (H3 headings)';
+        } else if (!includeIntroduction && includeConclusion) {
+          sectionsRequirement = '1. **DO NOT** include an Introduction section\n2. Create 4-5 main content sections (H2 headings)\n3. Create a Conclusion section (H2 heading)\n4. Each main content section should have 3-4 subsections (H3 headings)';
+        } else {
+          sectionsRequirement = '1. Create 4-5 main content sections (H2 headings)\n2. Each section should have 3-4 subsections (H3 headings)\n3. **DO NOT** include Introduction or Conclusion sections';
         }
 
         const prompt = `You are creating a content outline for a brand article. Your task is to generate a structured, SEO-optimized outline based on the research provided.
@@ -245,14 +263,12 @@ ${contentPlan ? JSON.stringify(contentPlan, null, 2) : 'No content plan data ava
 ${researchContext}
 
 **REQUIREMENTS**:
-1. Create 4-5 main sections (H2 headings)
-2. Each section should have 3-4 subsections (H3 headings)
-3. **DO NOT** include Introduction or Conclusion sections
-4. Focus on actionable, valuable content for the target audience
-5. Incorporate the SEO keyword "${jobDetails.post_keyword}" naturally
-6. Match the brand voice: ${brandProfile.voice_traits || 'professional and authoritative'}
-7. Align with brand values: ${brandProfile.brand_values}
-8. Structure should be logical and flow naturally${restrictionNotes}
+${sectionsRequirement}
+5. Focus on actionable, valuable content for the target audience
+6. Incorporate the SEO keyword "${jobDetails.post_keyword}" naturally
+7. Match the brand voice: ${brandProfile.voice_traits || 'professional and authoritative'}
+8. Align with brand values: ${brandProfile.brand_values}
+9. Structure should be logical and flow naturally${restrictionNotes}
 
 **OUTPUT FORMAT**:
 Return ONLY a valid JSON object matching this exact structure:
