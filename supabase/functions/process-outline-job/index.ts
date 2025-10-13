@@ -394,15 +394,17 @@ Respond with a JSON structure containing these three sets of search terms. Forma
             ]
           };
           
-          // Save the simple outline (both tables)
+          // Save the simple outline using RPC function for UUID casting
           await supabase
-            .from('content_plan_outlines')
-            .update({
-              outline: JSON.stringify(simpleOutline),
-              status: 'completed',
-              updated_at: new Date().toISOString()
-            })
-            .eq('guid', job_id);
+            .rpc('upsert_content_plan_outline', {
+              p_guid: job_id,
+              p_content_plan_guid: jobDetails.content_plan_guid,
+              p_post_title: jobDetails.post_title,
+              p_domain: jobDetails.domain,
+              p_keyword: jobDetails.post_keyword,
+              p_outline: JSON.stringify(simpleOutline),
+              p_status: 'completed'
+            });
 
           await supabase
             .from('content_plan_outlines_ai')
@@ -669,15 +671,17 @@ Format your response as a JSON object with this structure:
         // Step 12: Save outline to database (both tables)
         console.log('Saving outline to database');
 
-        // Update content_plan_outlines with the outline
+        // Upsert into content_plan_outlines using RPC function for UUID casting
         await supabase
-          .from('content_plan_outlines')
-          .update({
-            outline: JSON.stringify(outlineJson),
-            status: 'completed',
-            updated_at: new Date().toISOString()
-          })
-          .eq('guid', job_id);
+          .rpc('upsert_content_plan_outline', {
+            p_guid: job_id,
+            p_content_plan_guid: jobDetails.content_plan_guid,
+            p_post_title: jobDetails.post_title,
+            p_domain: jobDetails.domain,
+            p_keyword: jobDetails.post_keyword,
+            p_outline: JSON.stringify(outlineJson),
+            p_status: 'completed'
+          });
 
         // Try to insert into content_plan_outlines_ai (optional - for history)
         try {

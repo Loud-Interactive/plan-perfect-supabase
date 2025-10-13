@@ -490,23 +490,29 @@ IMPORTANT: Return ONLY the JSON object. Do not wrap in markdown code blocks, do 
             status: 'saving_outline'
           });
 
-        // Step 8a: Update content_plan_outlines with the outline (this record should already exist)
-        const { data: updateResult, error: updateOutlineError } = await supabase
-          .from('content_plan_outlines')
-          .update({
-            outline: JSON.stringify(outlineJson),
-            status: 'completed',
-            updated_at: new Date().toISOString()
-          })
-          .eq('guid', job_id)
-          .select();
+        // Step 8a: Save to content_plan_outlines using the RPC function we created
+        console.log('Attempting to save outline to content_plan_outlines...');
 
-        if (updateOutlineError) {
-          console.error('Error updating content_plan_outlines:', updateOutlineError);
-          throw new Error(`Failed to update content_plan_outlines: ${updateOutlineError.message}`);
+        const { data: saveResult, error: saveError } = await supabase.rpc('save_outline', {
+          p_guid: job_id,
+          p_content_plan_guid: jobDetails.content_plan_guid || '',
+          p_post_title: jobDetails.post_title,
+          p_domain: jobDetails.domain,
+          p_keyword: jobDetails.post_keyword,
+          p_outline: JSON.stringify(outlineJson),
+          p_status: 'completed'
+        });
+
+        if (saveError) {
+          console.error('Error calling save_outline RPC:', saveError);
+          throw new Error(`Failed to save outline: ${saveError.message}`);
         }
 
-        console.log('✅ Updated content_plan_outlines with outline', updateResult ? `(${updateResult.length} rows)` : '(no rows returned)');
+        if (saveResult === true) {
+          console.log('✅ Successfully saved outline to content_plan_outlines');
+        } else {
+          console.log('⚠️ save_outline returned false, but job will continue');
+        }
 
         // Step 8b: Try to insert into content_plan_outlines_ai (optional - for history)
         try {
@@ -529,7 +535,7 @@ IMPORTANT: Return ONLY the JSON object. Do not wrap in markdown code blocks, do 
         }
 
         // Step 8c: Update job status to completed
-        const { error: updateError } = await supabase
+        const { error: jobUpdateError } = await supabase
           .from('outline_generation_jobs')
           .update({
             status: 'completed',
@@ -538,9 +544,9 @@ IMPORTANT: Return ONLY the JSON object. Do not wrap in markdown code blocks, do 
           })
           .eq('id', job_id);
 
-        if (updateError) {
-          console.error('Error updating outline_generation_jobs:', updateError);
-          throw new Error(`Failed to update job status: ${updateError.message}`);
+        if (jobUpdateError) {
+          console.error('Error updating outline_generation_jobs:', jobUpdateError);
+          throw new Error(`Failed to update job status: ${jobUpdateError.message}`);
         }
 
         console.log('✅ Updated outline_generation_jobs status to completed');
