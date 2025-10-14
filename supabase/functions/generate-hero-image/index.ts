@@ -368,20 +368,23 @@ IMPORTANT:
         }
       }
 
-      const { error: updateError } = await supabaseClient
-        .from("tasks")
-        .update({
-          hero_image_url: publicUrl,
-          hero_image_status: "Generated",
-          hero_image_thinking: JSON.stringify(heroImageThinkingData),
-          updated_at: new Date().toISOString(),
-        })
-        .eq("task_id", task.task_id);
+      // Use RPC function to update task with proper UUID casting
+      const { data: updateResult, error: updateError } = await supabaseClient
+        .rpc('update_task_hero_image', {
+          p_task_id: task.task_id,
+          p_hero_image_url: publicUrl,
+          p_hero_image_status: "Generated",
+          p_hero_image_thinking: JSON.stringify(heroImageThinkingData)
+        });
 
       if (updateError) {
         throw new Error(
           `Error updating task with hero image URL: ${updateError.message}`,
         );
+      }
+
+      if (!updateResult) {
+        throw new Error('Failed to update task - RPC returned false');
       }
 
       console.log("Task updated with hero image URL");
