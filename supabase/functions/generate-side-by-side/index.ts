@@ -516,14 +516,20 @@ serve(async (req) => {
       console.log('[Main] Using existing task:', taskId, '- updating status to loading_preferences');
 
       // Only update status, preserve all other existing data
-      await supabase.from('tasks').update({
-        status: 'loading_preferences',
-        updated_at: new Date().toISOString()
-      }).eq('task_id', taskId);
+      await supabase.rpc('update_task_by_id', {
+        p_task_id: taskId,
+        p_update_data: {
+          status: 'loading_preferences',
+          updated_at: new Date().toISOString()
+        }
+      });
     }
 
     // Step 2: Load preferences
-    await supabase.from('tasks').update({ status: 'loading_preferences' }).eq('task_id', taskId);
+    await supabase.rpc('update_task_by_id', {
+      p_task_id: taskId,
+      p_update_data: { status: 'loading_preferences' }
+    });
     const { preferences, calloutPreferences } = await loadCompletePreferences(supabase, outlineData.client_domain);
     console.log('[Main] Loaded preferences for domain:', outlineData.client_domain);
 
@@ -547,7 +553,10 @@ serve(async (req) => {
       markdown = existingTaskData.edited_content;
     } else {
       console.log('[Main] ⚠️ No existing markdown - generating new markdown');
-      await supabase.from('tasks').update({ status: 'generating_markdown' }).eq('task_id', taskId);
+      await supabase.rpc('update_task_by_id', {
+        p_task_id: taskId,
+        p_update_data: { status: 'generating_markdown' }
+      });
       markdown = await generateMarkdown(outlineData);
       generatedMarkdown = true;
       console.log('[Main] Generated new markdown');
@@ -562,34 +571,52 @@ serve(async (req) => {
         : existingTaskData.post_json;
     } else {
       console.log('[Main] ⚠️ No existing JSON - converting markdown to JSON');
-      await supabase.from('tasks').update({ status: 'converting_markdown_to_json' }).eq('task_id', taskId);
+      await supabase.rpc('update_task_by_id', {
+        p_task_id: taskId,
+        p_update_data: { status: 'converting_markdown_to_json' }
+      });
       json = await markdownToJson(markdown, outlineData);
       generatedJson = true;
       console.log('[Main] Converted markdown to JSON');
     }
 
     // Step 5: Generate callouts with Groq
-    await supabase.from('tasks').update({ status: 'generating_ai_callouts' }).eq('task_id', taskId);
+    await supabase.rpc('update_task_by_id', {
+      p_task_id: taskId,
+      p_update_data: { status: 'generating_ai_callouts' }
+    });
     const calloutResult = await generateCallouts(json, GROQ_API_KEY, outlineData.client_domain);
     console.log('[Main] Generated callouts:', calloutResult.callouts.size);
 
     // Step 6: Generate enhanced summary with Groq
-    await supabase.from('tasks').update({ status: 'generating_ai_summary' }).eq('task_id', taskId);
+    await supabase.rpc('update_task_by_id', {
+      p_task_id: taskId,
+      p_update_data: { status: 'generating_ai_summary' }
+    });
     const enhancedSummary = await generateEnhancedSummary(json, GROQ_API_KEY, outlineData.client_domain);
     json.summary = { content: enhancedSummary };
     console.log('[Main] Generated enhanced summary');
 
     // Step 7: Construct HTML with callouts
-    await supabase.from('tasks').update({ status: 'constructing_html' }).eq('task_id', taskId);
+    await supabase.rpc('update_task_by_id', {
+      p_task_id: taskId,
+      p_update_data: { status: 'constructing_html' }
+    });
     const html = await constructHTML(json, preferences, calloutPreferences, calloutResult.callouts);
     console.log('[Main] Constructed HTML:', html.length, 'characters');
 
     // Step 8: Injecting callouts into HTML
-    await supabase.from('tasks').update({ status: 'injecting_callouts' }).eq('task_id', taskId);
+    await supabase.rpc('update_task_by_id', {
+      p_task_id: taskId,
+      p_update_data: { status: 'injecting_callouts' }
+    });
     console.log('[Main] Callouts injected into HTML');
 
     // Step 9: Finalizing HTML
-    await supabase.from('tasks').update({ status: 'finalizing_html' }).eq('task_id', taskId);
+    await supabase.rpc('update_task_by_id', {
+      p_task_id: taskId,
+      p_update_data: { status: 'finalizing_html' }
+    });
     console.log('[Main] Finalizing HTML document');
 
     // Step 10: Generate JSON-LD schema with Groq (SKIPPED to avoid timeout - generate separately)
@@ -597,7 +624,10 @@ serve(async (req) => {
     const schemaResult = { success: false, schema: '', reasoning: '', error: 'Skipped to avoid timeout' };
 
     // Step 11: Saving to database
-    await supabase.from('tasks').update({ status: 'saving_to_database' }).eq('task_id', taskId);
+    await supabase.rpc('update_task_by_id', {
+      p_task_id: taskId,
+      p_update_data: { status: 'saving_to_database' }
+    });
     console.log('[Main] Saving generated content to database');
 
     // Step 12: Update task with generated content
@@ -635,11 +665,20 @@ serve(async (req) => {
       updateData.schema_added_at = new Date().toISOString();
     }
 
-    const { error: updateError } = await supabase.from('tasks').update(updateData).eq('task_id', taskId);
+    // Use RPC for proper UUID casting with dynamic update data
+    const { data: updateResult, error: updateError } = await supabase.rpc('update_task_by_id', {
+      p_task_id: taskId,
+      p_update_data: updateData
+    });
 
     if (updateError) {
       console.error('[Main] ❌ Database update failed:', updateError);
       throw new Error(`Failed to save to database: ${updateError.message}`);
+    }
+
+    if (!updateResult) {
+      console.error('[Main] ❌ Database update returned false');
+      throw new Error('Failed to save to database: RPC returned false');
     }
 
     console.log('[Main] ✅ Task completed successfully');
@@ -666,11 +705,14 @@ serve(async (req) => {
     // Only update status, error_message, and updated_at - don't touch other fields
     if (taskId) {
       try {
-        await supabase.from('tasks').update({
-          status: 'failed',
-          message: error.message, // Using 'message' field per schema, not 'error_message'
-          updated_at: new Date().toISOString()
-        }).eq('task_id', taskId);
+        await supabase.rpc('update_task_by_id', {
+          p_task_id: taskId,
+          p_update_data: {
+            status: 'failed',
+            message: error.message, // Using 'message' field per schema, not 'error_message'
+            updated_at: new Date().toISOString()
+          }
+        });
       } catch (statusError) {
         console.error('[Main] Failed to update error status:', statusError);
       }

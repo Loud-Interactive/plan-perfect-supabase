@@ -52,19 +52,24 @@ serve(async (req) => {
     const task_id = taskData[0].task_id;
     const now = new Date().toISOString();
     
-    // Update the live_post_url and last_updated_at fields
-    const { data: updatedTask, error: updateError } = await supabase
-      .from('tasks')
-      .update({ 
-        live_post_url: processedUrl, 
-        last_updated_at: now 
-      })
-      .eq('task_id', task_id)
-      .select();
+    // Update the live_post_url and last_updated_at fields using RPC for proper UUID casting
+    const { data: updateResult, error: updateError } = await supabase
+      .rpc('update_task_live_post_url', {
+        p_task_id: task_id,
+        p_live_post_url: processedUrl,
+        p_last_updated_at: now
+      });
 
     if (updateError) {
       return new Response(
         JSON.stringify({ error: `Failed to update task: ${updateError.message}` }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!updateResult) {
+      return new Response(
+        JSON.stringify({ error: 'Failed to update task - RPC returned false' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
