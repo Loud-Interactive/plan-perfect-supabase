@@ -7,10 +7,14 @@ PlanPerfect is an AI-powered content generation system that orchestrates a multi
 **Key Capabilities**:
 - 🔄 Multi-stage content pipeline (Research → Outline → Draft → QA → Export → Complete)
 - ⏱️ Asynchronous job processing with queue management
-- 🔁 Automatic retry logic with configurable attempts
+- 🔁 Automatic retry logic with exponential backoff
 - 📊 Granular status tracking and event logging
 - 🎯 Stage-specific worker specialization
 - ⚡ Fire-and-forget execution pattern
+- 🚀 High-scale throughput with batch dequeueing
+- 🔧 Priority-based queue processing
+- ⚰️ Dead letter queue for manual intervention
+- 📈 Queue depth introspection and monitoring
 
 ## Architecture Overview
 
@@ -446,18 +450,28 @@ try {
 
 ### content_jobs
 
-Primary job tracking table:
+Primary job tracking table with retry metadata:
 
 ```sql
 CREATE TABLE content_jobs (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  job_type TEXT NOT NULL,  -- 'article', 'schema', etc.
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  job_type TEXT NOT NULL,
   requester_email TEXT,
-  payload JSONB,
-  status TEXT NOT NULL,    -- 'queued', 'processing', 'completed', 'failed'
-  stage TEXT NOT NULL,     -- Current stage: 'research', 'outline', etc.
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
+  payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status TEXT NOT NULL DEFAULT 'queued',
+  stage TEXT NOT NULL DEFAULT 'intake',
+  priority INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 5,
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  retry_delay_seconds INTEGER NOT NULL DEFAULT 60,
+  first_queued_at TIMESTAMPTZ,
+  last_queued_at TIMESTAMPTZ,
+  last_dequeued_at TIMESTAMPTZ,
+  last_completed_at TIMESTAMPTZ,
+  last_failed_at TIMESTAMPTZ,
+  last_dead_letter_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
 
@@ -491,71 +505,157 @@ CREATE TABLE content_events (
 );
 ```
 
-### content_stages
+### content_job_stages
 
-Stage execution tracking:
+Stage-level execution tracking with retry metadata:
 
 ```sql
-CREATE TABLE content_stages (
-  job_id UUID REFERENCES content_jobs(id),
+CREATE TABLE content_job_stages (
+  job_id UUID REFERENCES content_jobs(id) ON DELETE CASCADE,
   stage TEXT NOT NULL,
-  status TEXT NOT NULL,      -- 'pending', 'processing', 'completed', 'failed'
-  attempt_count INTEGER DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending',
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  max_attempts INTEGER NOT NULL DEFAULT 3,
+  priority INTEGER NOT NULL DEFAULT 0,
+  retry_delay_seconds INTEGER NOT NULL DEFAULT 60,
+  visibility_timeout_seconds INTEGER NOT NULL DEFAULT 600,
+  available_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_queued_at TIMESTAMPTZ,
+  last_dequeued_at TIMESTAMPTZ,
+  next_retry_at TIMESTAMPTZ,
+  dead_lettered_at TIMESTAMPTZ,
+  dead_letter_reason TEXT,
   started_at TIMESTAMPTZ,
-  completed_at TIMESTAMPTZ,
-  error_message TEXT,
+  finished_at TIMESTAMPTZ,
+  last_error JSONB,
   PRIMARY KEY (job_id, stage)
 );
 ```
 
-## Queue Management (pgmq)
+### content_dead_letters
 
-### Enqueue Function
+Dead letter queue for permanently failed jobs:
+
+```sql
+CREATE TABLE content_dead_letters (
+  id BIGSERIAL PRIMARY KEY,
+  queue_name TEXT NOT NULL,
+  msg_id BIGINT,
+  job_id UUID,
+  stage TEXT,
+  payload JSONB NOT NULL,
+  failure_reason TEXT,
+  error_details JSONB,
+  attempt_count INTEGER NOT NULL DEFAULT 0,
+  routed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+## Queue Management (pgmq) - Enhanced with Hardening
+
+### Enqueue Function (with priority and delay support)
 
 ```typescript
 // _shared/queue.ts
-export async function enqueueJob(
-  queue: 'content' | 'schema',
-  jobId: string,
-  stage: string,
-  payload: Record<string, unknown>
-) {
-  const message = {
-    job_id: jobId,
-    stage,
-    payload,
-  }
+await enqueueJob('content', jobId, 'research', payload, {
+  priority: 5,
+  delaySeconds: 30,
+  visibilitySeconds: 600,
+  maxAttempts: 6,
+  retryDelaySeconds: 120,
+})
+```
 
-  const { error } = await supabaseAdmin.rpc('enqueue_stage', {
-    p_queue: queue,
-    p_message: message,
-  })
+> Passing a number instead of an object is treated as `delaySeconds`. For example `enqueueJob('content', jobId, 'research', payload, 45)` delays the message for 45 seconds before it becomes visible.
 
-  if (error) {
-    console.error(`Failed to enqueue ${stage} for job ${jobId}`, error)
-    throw error
-  }
+
+### Batch Dequeue Function (NEW)
+
+```typescript
+// Dequeue multiple messages at once for high-throughput workers
+const messages = await batchDequeueJobs('content', 600, 10)
+
+for (const { msg_id, message } of messages) {
+  const { job_id, stage, payload } = message
+  // Process job in parallel or sequentially
 }
 ```
 
-### Dequeue Function
+### Single Dequeue Function
 
 ```typescript
 // Used by all workers
 const { data, error } = await supabaseAdmin.rpc('dequeue_stage', {
   p_queue: 'content',
-  p_visibility: 600, // Visibility timeout in seconds
+  p_visibility_seconds: 600, // Visibility timeout in seconds
 })
 
 if (!data || data.length === 0) {
   // No messages in queue
-  return new Response(JSON.stringify({ message: 'no messages' }), {
-    status: 204,
-  })
+  return new Response(JSON.stringify({ message: 'no messages' }), { status: 204 })
 }
 
 const { msg_id, message } = data[0]
 const { job_id, stage, payload } = message
+```
+
+### Dead Letter Queue Support (NEW)
+
+When a job exceeds max retry attempts, it can be moved to the dead letter queue for manual inspection:
+
+```typescript
+import { moveToDeadLetter } from '../_shared/queue.ts'
+import { shouldDeadLetter } from '../_shared/stages.ts'
+
+if (await shouldDeadLetter(jobId, stage)) {
+  await moveToDeadLetter(
+    queue,
+    msg_id,
+    jobId,
+    stage,
+    message,
+    'Max retry attempts exceeded',
+    { error: lastError },
+    attemptCount
+  )
+}
+```
+
+### Visibility Extension (NEW)
+
+For long-running jobs, extend visibility timeout to prevent premature re-queueing:
+
+```typescript
+import { extendVisibility } from '../_shared/queue.ts'
+
+// Extend visibility by 5 more minutes
+await extendVisibility(queue, msg_id, jobId, stage, 300)
+```
+
+### Delayed Requeue (NEW)
+
+Requeue a job with exponential backoff delay:
+
+```typescript
+import { delayedRequeueJob } from '../_shared/queue.ts'
+
+await delayedRequeueJob(queue, msg_id, jobId, stage, payload, {
+  baseDelaySeconds: 60, // Will be multiplied by 2^attempt
+  priorityOverride: 5,
+  visibilitySeconds: 600,
+})
+```
+
+### Queue Depth Introspection (NEW)
+
+Monitor queue depth and message age for operational insights:
+
+```typescript
+import { getQueueDepth } from '../_shared/queue.ts'
+
+const metrics = await getQueueDepth('content')
+// Returns: { queue_name, queue_length, newest_msg_age_sec, oldest_msg_age_sec, total_messages }
 ```
 
 ### Message Visibility Timeout
@@ -563,9 +663,10 @@ const { job_id, stage, payload } = message
 **Purpose**: Prevents message from being dequeued by another worker while being processed.
 
 - Default: 600 seconds (10 minutes)
-- Configurable via `CONTENT_QUEUE_VISIBILITY` env var
+- Configurable per-enqueue via `visibilitySeconds` option
 - If worker doesn't archive message before timeout, it becomes visible again
 - Enables automatic retry on worker crashes
+- Can be extended dynamically with `extendVisibility()`
 
 ## Configuration
 
