@@ -13,6 +13,12 @@ export const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   },
 })
 
+type Pipeline = 'content' | 'pageperfect'
+
+function getEventsTable(pipeline: Pipeline) {
+  return pipeline === 'content' ? 'content_job_events' : 'pageperfect_job_events'
+}
+
 function toNumber(value: unknown): number | undefined {
   if (typeof value === 'number') return value
   if (typeof value === 'string' && value.trim() !== '') {
@@ -63,10 +69,16 @@ export async function recordMetric({
   }
 }
 
-export async function insertEvent(jobId: string, status: string, message: string, metadata: Record<string, unknown> = {}) {
+export async function insertEventForPipeline(
+  pipeline: Pipeline,
+  jobId: string,
+  status: string,
+  message: string,
+  metadata: Record<string, unknown> = {},
+  stage?: string
+) {
   const timestamp = new Date().toISOString()
-  const stage = typeof metadata.stage === 'string' ? metadata.stage : undefined
-  const attempt = toNumber((metadata as Record<string, unknown>)?.attempt ?? (metadata as Record<string, unknown>)?.attempt_count)
+  const attemptVal = toNumber((metadata as Record<string, unknown>)?.attempt ?? (metadata as Record<string, unknown>)?.attempt_count)
   const messageId = toNumber((metadata as Record<string, unknown>)?.message_id ?? (metadata as Record<string, unknown>)?.msg_id)
   const latencyMs = toNumber((metadata as Record<string, unknown>)?.latency_ms ?? (metadata as Record<string, unknown>)?.latency)
   const priority = toNumber((metadata as Record<string, unknown>)?.priority)
@@ -74,11 +86,12 @@ export async function insertEvent(jobId: string, status: string, message: string
 
   const logPayload = {
     type: 'job_event',
+    pipeline,
     job_id: jobId,
     stage,
     status,
     message,
-    attempt,
+    attempt: attemptVal,
     message_id: messageId,
     latency_ms: latencyMs,
     priority,
@@ -88,26 +101,27 @@ export async function insertEvent(jobId: string, status: string, message: string
 
   console.log(JSON.stringify({ ...logPayload, metadata }))
 
-  const { error } = await supabaseAdmin.from('content_job_events').insert({
-    job_id: jobId,
-    stage,
+  const { error } = await supabaseAdmin.from(getEventsTable(pipeline)).insert({
+    job_id: jobId ?? null,
+    stage: stage ?? null,
     status,
     message,
     metadata,
   })
-
+  
   if (error) {
-    console.error('Failed to insert job event', error)
+    console.error(`Failed to insert ${pipeline} job event`, error)
   }
 
-  if (stage && (status === 'error' || status === 'failed')) {
+  // Record metrics for content pipeline only (observability focus)
+  if (pipeline === 'content' && stage && (status === 'error' || status === 'failed')) {
     await recordMetric({
       jobId,
       stage,
       metricType: 'failure',
       value: 1,
       messageId,
-      attempt,
+      attempt: attemptVal,
       priority,
       metadata: {
         status,
@@ -117,4 +131,8 @@ export async function insertEvent(jobId: string, status: string, message: string
       },
     })
   }
+}
+
+export async function insertEvent(jobId: string, status: string, message: string, metadata: Record<string, unknown> = {}) {
+  return insertEventForPipeline('content', jobId, status, message, metadata)
 }

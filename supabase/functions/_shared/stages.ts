@@ -10,6 +10,8 @@ export interface StageInfo {
   started_at?: string
 }
 
+type Pipeline = 'content' | 'pageperfect'
+
 export interface StageContext {
   queue?: string
   messageId?: number
@@ -21,6 +23,14 @@ export interface StageContext {
 export interface StageCompletionContext {
   queue?: string
   messageId?: number
+}
+
+function getStagesTable(pipeline: Pipeline): string {
+  return pipeline === 'content' ? 'content_job_stages' : 'pageperfect_job_stages'
+}
+
+function getJobsTable(pipeline: Pipeline): string {
+  return pipeline === 'content' ? 'content_jobs' : 'pageperfect_jobs'
 }
 
 function formatError(error: unknown): string {
@@ -59,12 +69,18 @@ function buildMetricMetadata(base: Record<string, unknown>, additions: Record<st
   return metadata
 }
 
-export async function startStage(jobId: string, stage: string, context: StageContext = {}): Promise<StageInfo> {
+export async function startStageForPipeline(
+  pipeline: Pipeline,
+  jobId: string,
+  stage: string,
+  context: StageContext = {}
+): Promise<StageInfo> {
+  const stagesTable = getStagesTable(pipeline)
   const startTime = context.dequeuedAt ? new Date(context.dequeuedAt) : new Date()
   const startIso = startTime.toISOString()
 
   const { data, error } = await supabaseAdmin
-    .from('content_job_stages')
+    .from(stagesTable)
     .select('attempt_count, max_attempts, retry_delay_seconds, priority, status, dead_lettered_at')
     .eq('job_id', jobId)
     .eq('stage', stage)
@@ -77,7 +93,7 @@ export async function startStage(jobId: string, stage: string, context: StageCon
   const priority = data?.priority ?? 0
 
   const { error: upsertError } = await supabaseAdmin
-    .from('content_job_stages')
+    .from(stagesTable)
     .upsert({
       job_id: jobId,
       stage,
@@ -92,39 +108,41 @@ export async function startStage(jobId: string, stage: string, context: StageCon
     })
 
   if (error || upsertError) {
-    console.error('Failed to start stage', stage, error ?? upsertError)
+    console.error(`Failed to start ${pipeline} stage`, stage, error ?? upsertError)
   }
 
-  const queueLatencyMs = computeQueueLatency(startTime, context)
+  if (pipeline === 'content') {
+    const queueLatencyMs = computeQueueLatency(startTime, context)
+    console.log(
+      JSON.stringify({
+        type: 'stage_started',
+        pipeline,
+        job_id: jobId,
+        stage,
+        attempt: nextAttempt,
+        max_attempts: maxAttempts,
+        priority,
+        queue: context.queue,
+        message_id: context.messageId,
+        queue_latency_ms: queueLatencyMs,
+        timestamp: startIso,
+      })
+    )
 
-  console.log(
-    JSON.stringify({
-      type: 'stage_started',
-      job_id: jobId,
+    await recordMetric({
+      jobId,
       stage,
+      metricType: 'attempt',
+      value: 1,
+      messageId: context.messageId,
       attempt: nextAttempt,
-      max_attempts: maxAttempts,
       priority,
-      queue: context.queue,
-      message_id: context.messageId,
-      queue_latency_ms: queueLatencyMs,
-      timestamp: startIso,
+      metadata: buildMetricMetadata(
+        { max_attempts: maxAttempts },
+        { queue: context.queue, queue_latency_ms: queueLatencyMs }
+      ),
     })
-  )
-
-  await recordMetric({
-    jobId,
-    stage,
-    metricType: 'attempt',
-    value: 1,
-    messageId: context.messageId,
-    attempt: nextAttempt,
-    priority,
-    metadata: buildMetricMetadata(
-      { max_attempts: maxAttempts },
-      { queue: context.queue, queue_latency_ms: queueLatencyMs }
-    ),
-  })
+  }
 
   return {
     attempt_count: nextAttempt,
@@ -136,19 +154,26 @@ export async function startStage(jobId: string, stage: string, context: StageCon
   }
 }
 
-export async function completeStage(jobId: string, stage: string, context: StageCompletionContext = {}) {
+export async function completeStageForPipeline(
+  pipeline: Pipeline,
+  jobId: string,
+  stage: string,
+  context: StageCompletionContext = {}
+) {
+  const stagesTable = getStagesTable(pipeline)
+  const jobsTable = getJobsTable(pipeline)
   const finishedAt = new Date()
   const finishedIso = finishedAt.toISOString()
 
   const { data: stageData } = await supabaseAdmin
-    .from('content_job_stages')
+    .from(stagesTable)
     .select('started_at, attempt_count, priority')
     .eq('job_id', jobId)
     .eq('stage', stage)
     .maybeSingle()
 
   const { error } = await supabaseAdmin
-    .from('content_job_stages')
+    .from(stagesTable)
     .update({
       status: 'completed',
       finished_at: finishedIso,
@@ -159,59 +184,70 @@ export async function completeStage(jobId: string, stage: string, context: Stage
     .eq('stage', stage)
 
   if (error) {
-    console.error('Failed to mark stage complete', stage, error)
+    console.error(`Failed to mark ${pipeline} stage complete`, stage, error)
   }
 
   await supabaseAdmin
-    .from('content_jobs')
+    .from(jobsTable)
     .update({
       status: 'processing',
       last_completed_at: finishedIso,
     })
     .eq('id', jobId)
 
-  const attemptCount = stageData?.attempt_count
-  const priority = stageData?.priority
-  const startedAt = stageData?.started_at ? new Date(stageData.started_at) : undefined
-  const durationMs = startedAt ? finishedAt.getTime() - startedAt.getTime() : undefined
+  if (pipeline === 'content') {
+    const attemptCount = stageData?.attempt_count
+    const priority = stageData?.priority
+    const startedAt = stageData?.started_at ? new Date(stageData.started_at) : undefined
+    const durationMs = startedAt ? finishedAt.getTime() - startedAt.getTime() : undefined
 
-  console.log(
-    JSON.stringify({
-      type: 'stage_completed',
-      job_id: jobId,
-      stage,
-      duration_ms: durationMs,
-      attempt: attemptCount,
-      priority,
-      queue: context.queue,
-      message_id: context.messageId,
-      timestamp: finishedIso,
-    })
-  )
+    console.log(
+      JSON.stringify({
+        type: 'stage_completed',
+        pipeline,
+        job_id: jobId,
+        stage,
+        duration_ms: durationMs,
+        attempt: attemptCount,
+        priority,
+        queue: context.queue,
+        message_id: context.messageId,
+        timestamp: finishedIso,
+      })
+    )
 
-  if (durationMs !== undefined) {
-    await recordMetric({
-      jobId,
-      stage,
-      metricType: 'duration',
-      value: durationMs,
-      messageId: context.messageId,
-      attempt: attemptCount,
-      priority,
-      metadata: buildMetricMetadata(
-        { status: 'completed' },
-        { queue: context.queue, started_at: stageData?.started_at, finished_at: finishedIso }
-      ),
-    })
+    if (durationMs !== undefined) {
+      await recordMetric({
+        jobId,
+        stage,
+        metricType: 'duration',
+        value: durationMs,
+        messageId: context.messageId,
+        attempt: attemptCount,
+        priority,
+        metadata: buildMetricMetadata(
+          { status: 'completed' },
+          { queue: context.queue, started_at: stageData?.started_at, finished_at: finishedIso }
+        ),
+      })
+    }
   }
 }
 
-export async function failStage(jobId: string, stage: string, error: unknown, context: StageCompletionContext = {}) {
+export async function failStageForPipeline(
+  pipeline: Pipeline,
+  jobId: string,
+  stage: string,
+  error: unknown,
+  context: StageCompletionContext = {}
+) {
+  const stagesTable = getStagesTable(pipeline)
+  const jobsTable = getJobsTable(pipeline)
   const finishedAt = new Date()
   const finishedIso = finishedAt.toISOString()
 
   const { data } = await supabaseAdmin
-    .from('content_job_stages')
+    .from(stagesTable)
     .select('attempt_count, max_attempts, retry_delay_seconds, priority, started_at')
     .eq('job_id', jobId)
     .eq('stage', stage)
@@ -224,7 +260,7 @@ export async function failStage(jobId: string, stage: string, error: unknown, co
   const nextRetryAt = new Date(Date.now() + retryDelay * 1000 * Math.pow(2, Math.min(attemptCount, 5)))
 
   const { error: updateError } = await supabaseAdmin
-    .from('content_job_stages')
+    .from(stagesTable)
     .update({
       status: attemptCount >= maxAttempts ? 'failed' : 'error',
       finished_at: finishedIso,
@@ -235,75 +271,83 @@ export async function failStage(jobId: string, stage: string, error: unknown, co
     .eq('stage', stage)
 
   if (updateError) {
-    console.error('Failed to record stage failure', stage, updateError)
+    console.error(`Failed to record ${pipeline} stage failure`, stage, updateError)
   }
 
   await supabaseAdmin
-    .from('content_jobs')
+    .from(jobsTable)
     .update({
       status: attemptCount >= maxAttempts ? 'failed' : 'error',
       last_failed_at: finishedIso,
     })
     .eq('id', jobId)
 
-  const startedAt = data?.started_at ? new Date(data.started_at) : undefined
-  const durationMs = startedAt ? finishedAt.getTime() - startedAt.getTime() : undefined
-  const formattedError = formatError(error)
+  if (pipeline === 'content') {
+    const startedAt = data?.started_at ? new Date(data.started_at) : undefined
+    const durationMs = startedAt ? finishedAt.getTime() - startedAt.getTime() : undefined
+    const formattedError = formatError(error)
 
-  console.log(
-    JSON.stringify({
-      type: 'stage_failed',
-      job_id: jobId,
-      stage,
-      attempt: attemptCount,
-      max_attempts: maxAttempts,
-      duration_ms: durationMs,
-      priority,
-      queue: context.queue,
-      message_id: context.messageId,
-      error: formattedError,
-      timestamp: finishedIso,
-    })
-  )
-
-  await recordMetric({
-    jobId,
-    stage,
-    metricType: 'failure',
-    value: 1,
-    messageId: context.messageId,
-    attempt: attemptCount,
-    priority,
-    metadata: buildMetricMetadata(
-      {
-        status: attemptCount >= maxAttempts ? 'failed' : 'error',
+    console.log(
+      JSON.stringify({
+        type: 'stage_failed',
+        pipeline,
+        job_id: jobId,
+        stage,
+        attempt: attemptCount,
+        max_attempts: maxAttempts,
+        duration_ms: durationMs,
+        priority,
+        queue: context.queue,
+        message_id: context.messageId,
         error: formattedError,
-        will_retry: attemptCount < maxAttempts,
-      },
-      { queue: context.queue }
-    ),
-  })
+        timestamp: finishedIso,
+      })
+    )
 
-  if (durationMs !== undefined) {
     await recordMetric({
       jobId,
       stage,
-      metricType: 'duration',
-      value: durationMs,
+      metricType: 'failure',
+      value: 1,
       messageId: context.messageId,
       attempt: attemptCount,
       priority,
       metadata: buildMetricMetadata(
-        { status: 'failed' },
-        { queue: context.queue, started_at: data?.started_at, finished_at: finishedIso }
+        {
+          status: attemptCount >= maxAttempts ? 'failed' : 'error',
+          error: formattedError,
+          will_retry: attemptCount < maxAttempts,
+        },
+        { queue: context.queue }
       ),
     })
+
+    if (durationMs !== undefined) {
+      await recordMetric({
+        jobId,
+        stage,
+        metricType: 'duration',
+        value: durationMs,
+        messageId: context.messageId,
+        attempt: attemptCount,
+        priority,
+        metadata: buildMetricMetadata(
+          { status: 'failed' },
+          { queue: context.queue, started_at: data?.started_at, finished_at: finishedIso }
+        ),
+      })
+    }
   }
 }
 
-export async function shouldDeadLetter(jobId: string, stage: string): Promise<boolean> {
+export async function shouldDeadLetterForPipeline(
+  pipeline: Pipeline,
+  jobId: string,
+  stage: string
+): Promise<boolean> {
+  const stagesTable = getStagesTable(pipeline)
   const { data } = await supabaseAdmin
-    .from('content_job_stages')
+    .from(stagesTable)
     .select('attempt_count, max_attempts')
     .eq('job_id', jobId)
     .eq('stage', stage)
@@ -312,4 +356,21 @@ export async function shouldDeadLetter(jobId: string, stage: string): Promise<bo
   if (!data) return false
 
   return data.attempt_count >= data.max_attempts
+}
+
+// Legacy wrappers for the PlanPerfect pipeline
+export async function startStage(jobId: string, stage: string, context: StageContext = {}): Promise<StageInfo> {
+  return startStageForPipeline('content', jobId, stage, context)
+}
+
+export async function completeStage(jobId: string, stage: string, context: StageCompletionContext = {}) {
+  return completeStageForPipeline('content', jobId, stage, context)
+}
+
+export async function failStage(jobId: string, stage: string, error: unknown, context: StageCompletionContext = {}) {
+  return failStageForPipeline('content', jobId, stage, error, context)
+}
+
+export async function shouldDeadLetter(jobId: string, stage: string): Promise<boolean> {
+  return shouldDeadLetterForPipeline('content', jobId, stage)
 }

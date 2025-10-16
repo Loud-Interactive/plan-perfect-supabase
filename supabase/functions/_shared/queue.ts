@@ -1,4 +1,4 @@
-import { supabaseAdmin, insertEvent } from './client.ts'
+import { supabaseAdmin, insertEvent, insertEventForPipeline } from './client.ts'
 
 export interface QueueMessage<T = Record<string, unknown>> {
   msg_id: number
@@ -20,11 +20,29 @@ export interface EnqueueOptions {
   retryDelaySeconds?: number
 }
 
+type Pipeline = 'content' | 'pageperfect'
+
 function normalizeEnqueueOptions(options?: number | EnqueueOptions): EnqueueOptions {
   if (typeof options === 'number') {
     return { delaySeconds: options }
   }
   return options ?? {}
+}
+
+function getQueueContext(queue: string): { pipeline: Pipeline; rpcPrefix: string } {
+  if (queue === 'pageperfect') {
+    return { pipeline: 'pageperfect', rpcPrefix: 'pageperfect_' }
+  }
+  return { pipeline: 'content', rpcPrefix: '' }
+}
+
+function getRpcName(queue: string, base: string) {
+  const { rpcPrefix } = getQueueContext(queue)
+  return `${rpcPrefix}${base}`
+}
+
+export function getPipelineForQueue(queue: string): Pipeline {
+  return getQueueContext(queue).pipeline
 }
 
 export async function enqueueJob(
@@ -35,7 +53,8 @@ export async function enqueueJob(
   options?: number | EnqueueOptions
 ) {
   const normalized = normalizeEnqueueOptions(options)
-  const { data, error } = await supabaseAdmin.rpc('enqueue_stage', {
+  const rpcName = getRpcName(queue, 'enqueue_stage')
+  const { data, error } = await supabaseAdmin.rpc(rpcName, {
     p_queue: queue,
     p_job_id: jobId,
     p_stage: stage,
@@ -49,11 +68,13 @@ export async function enqueueJob(
 
   if (error) {
     console.error('Failed to enqueue stage', error)
-    await insertEvent(jobId, 'error', 'enqueue_stage_failed', { stage, error })
+    const pipeline = getPipelineForQueue(queue)
+    await insertEventForPipeline(pipeline, jobId, 'error', 'enqueue_stage_failed', { stage, error, queue })
     throw error
   }
 
-  await insertEvent(jobId, 'queued', `Enqueued stage ${stage}`, {
+  const pipeline = getPipelineForQueue(queue)
+  await insertEventForPipeline(pipeline, jobId, 'queued', `Enqueued stage ${stage}`, {
     queue,
     message_id: data,
     priority: normalized.priority ?? 0,
@@ -64,7 +85,8 @@ export async function enqueueJob(
 }
 
 export async function dequeueNextJob(queue: string, visibilitySeconds = 600) {
-  const { data, error } = await supabaseAdmin.rpc('dequeue_stage', {
+  const rpcName = getRpcName(queue, 'dequeue_stage')
+  const { data, error } = await supabaseAdmin.rpc(rpcName, {
     p_queue: queue,
     p_visibility_seconds: visibilitySeconds,
   })
@@ -79,7 +101,8 @@ export async function dequeueNextJob(queue: string, visibilitySeconds = 600) {
 }
 
 export async function batchDequeueJobs(queue: string, visibilitySeconds = 600, batchSize = 10) {
-  const { data, error } = await supabaseAdmin.rpc('dequeue_stage_batch', {
+  const rpcName = getRpcName(queue, 'dequeue_stage_batch')
+  const { data, error } = await supabaseAdmin.rpc(rpcName, {
     p_queue: queue,
     p_visibility_seconds: visibilitySeconds,
     p_batch_size: batchSize,
@@ -121,7 +144,8 @@ export async function extendVisibility(
   stage: string,
   additionalSeconds = 300
 ) {
-  const { data, error } = await supabaseAdmin.rpc('extend_message_visibility', {
+  const rpcName = getRpcName(queue, 'extend_message_visibility')
+  const { data, error } = await supabaseAdmin.rpc(rpcName, {
     p_queue: queue,
     p_msg_id: msgId,
     p_job_id: jobId,
@@ -144,7 +168,8 @@ export async function delayedRequeueJob(
   options?: { baseDelaySeconds?: number; priorityOverride?: number; visibilitySeconds?: number }
 ) {
   const { baseDelaySeconds, priorityOverride, visibilitySeconds } = options ?? {}
-  const { data, error } = await supabaseAdmin.rpc('delayed_requeue_stage', {
+  const rpcName = getRpcName(queue, 'delayed_requeue_stage')
+  const { data, error } = await supabaseAdmin.rpc(rpcName, {
     p_queue: queue,
     p_msg_id: msgId,
     p_job_id: jobId,
@@ -156,10 +181,14 @@ export async function delayedRequeueJob(
   })
   if (error) {
     console.error('Failed to delay requeue', error)
-    await insertEvent(jobId, 'error', 'delayed_requeue_failed', { stage, error })
+    await insertEventForPipeline(getPipelineForQueue(queue), jobId, 'error', 'delayed_requeue_failed', {
+      stage,
+      error,
+      queue,
+    })
     throw error
   }
-  await insertEvent(jobId, 'requeued', `Requeued stage ${stage}`, {
+  await insertEventForPipeline(getPipelineForQueue(queue), jobId, 'requeued', `Requeued stage ${stage}`, {
     queue,
     message_id: data,
     base_delay_seconds: baseDelaySeconds ?? null,
@@ -177,7 +206,8 @@ export async function moveToDeadLetter(
   errorDetails?: Record<string, unknown>,
   attemptCount = 0
 ) {
-  const { data, error } = await supabaseAdmin.rpc('move_to_dead_letter', {
+  const rpcName = getRpcName(queue, 'move_to_dead_letter')
+  const { data, error } = await supabaseAdmin.rpc(rpcName, {
     p_queue: queue,
     p_msg_id: msgId,
     p_job_id: jobId,
@@ -191,10 +221,11 @@ export async function moveToDeadLetter(
     console.error('Failed to move to dead letter', error)
     throw error
   }
-  await insertEvent(jobId, 'dead_letter', `Moved to dead letter queue: ${failureReason}`, {
+  await insertEventForPipeline(getPipelineForQueue(queue), jobId, 'dead_letter', `Moved to dead letter queue: ${failureReason}`, {
     stage,
     attempt_count: attemptCount,
     dlq_id: data,
+    queue,
   })
   return data as number
 }

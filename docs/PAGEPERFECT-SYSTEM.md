@@ -20,15 +20,39 @@ PagePerfect is an AI-powered SEO optimization system that analyzes your content 
 ```mermaid
 graph TD
     A[GSC Data] -->|ingest-gsc| B[(gsc_page_query table)]
-    B -->|pageperfect-workflow| C[Crawl Page HTML]
-    C -->|submit-crawl-job| D[(crawl_jobs table)]
-    D -->|Crawl Complete| E[Segment & Embed]
+    B -->|pageperfect-workflow intake| C{{pageperfect_jobs}}
+    C -->|enqueue submit_crawl| Q1[[pageperfect queue]]
+    Q1 -->|dispatcher| D1[Submit Crawl Worker]
+    D1 -->|crawl_jobs| D[(crawl_jobs table)]
+    D -->|enqueue wait_crawl| Q1
+    Q1 --> D2[Wait Crawl Worker]
+    D2 -->|HTML ready| E[Segment & Embed Worker]
     E -->|OpenAI Embeddings| F[(page_embeddings table)]
-    F -->|Cluster Keywords| G[DBSCAN Clustering]
-    G -->|Clusters| H[(keyword_clusters table)]
-    H -->|Gap Analysis| I[Content Gap Detection]
-    I -->|Recommendations| J[(rewrite_recommendations table)]
+    F -->|Keyword Clustering Worker| G[(keyword_clusters table)]
+    G -->|Gap Analysis Worker| H[(rewrite_recommendations table)]
+    H -->|Rewrite Draft Worker| I[(rewrite_drafts / job results)]
 ```
+
+### Queue-Based Workflow
+
+PagePerfect now mirrors the PlanPerfect (content) pipeline with a resilient pgmq-backed queue. Key components:
+
+- `pageperfect_jobs`: Tracks overall job state, current stage, attempts, and metadata.
+- `pageperfect_job_stages`: Stores per-stage progress with retry and visibility controls.
+- `pageperfect_dead_letters`: Persists messages that exhaust retries for manual inspection.
+- `pageperfect_job_events`: Provides a granular audit trail for every stage transition.
+- `pageperfect_payloads`: Retains stage outputs to share data between workers.
+
+Stages are orchestrated through the `pageperfect` pgmq queue and scheduled by the shared dispatcher (`content-queue-dispatcher`) using the following workers:
+
+1. **Submit Crawl** – creates the ScraperAPI crawl job
+2. **Wait Crawl** – polls until crawl completion
+3. **Segment & Embed** – generates paragraph embeddings
+4. **Keyword Clustering** – groups keywords via DBSCAN
+5. **Gap Analysis** – surfaces rewrite opportunities
+6. **Rewrite Draft** – drafts recommended updates
+
+Each worker is responsible for popping a message, executing the stage, enqueueing the next stage (or completing the job), and handling retries/dead-letter routing via shared helpers.
 
 ### System Components
 
@@ -62,13 +86,20 @@ graph TD
    - Identifies missing topics (gaps)
    - Scores opportunities by impressions and position
 
-6. **Workflow Orchestration** (`pageperfect-workflow`)
-   - Chains all steps in sequence
-   - Checks dependencies
-   - Tracks execution status
-   - Implements smart caching
+6. **Workflow Intake** (`pageperfect-workflow`)
+   - Validates input (URL or pageId)
+   - Creates or finds page record
+   - Creates pageperfect_job
+   - Enqueues initial stage (submit_crawl)
+   - Returns job_id for tracking
 
-7. **Batch Processing** (`pageperfect-batch-processor`, cron functions)
+7. **Queue-Based Workers** (see `PAGEPERFECT-QUEUE-WORKERS.md`)
+   - Six specialized workers for each stage
+   - Automatic retry with exponential backoff
+   - Dead-letter handling for failures
+   - Shared helpers with PlanPerfect pipeline
+
+8. **Batch Processing** (`pageperfect-batch-processor`, cron functions)
    - Scheduled GSC data ingestion
    - Automatic CTR recalibration
    - URL queue processing
