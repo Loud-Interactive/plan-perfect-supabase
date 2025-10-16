@@ -13,14 +13,32 @@ export const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   },
 })
 
-export async function insertEvent(jobId: string, status: string, message: string, metadata: Record<string, unknown> = {}) {
-  const { error } = await supabaseAdmin.from('content_job_events').insert({
-    job_id: jobId,
+type Pipeline = 'content' | 'pageperfect'
+
+function getEventsTable(pipeline: Pipeline) {
+  return pipeline === 'content' ? 'content_job_events' : 'pageperfect_job_events'
+}
+
+export async function insertEventForPipeline(
+  pipeline: Pipeline,
+  jobId: string,
+  status: string,
+  message: string,
+  metadata: Record<string, unknown> = {},
+  stage?: string
+) {
+  const { error } = await supabaseAdmin.from(getEventsTable(pipeline)).insert({
+    job_id: jobId ?? null,
+    stage: stage ?? null,
     status,
     message,
     metadata,
   })
   if (error) {
-    console.error('Failed to insert job event', error)
+    console.error(`Failed to insert ${pipeline} job event`, error)
   }
+}
+
+export async function insertEvent(jobId: string, status: string, message: string, metadata: Record<string, unknown> = {}) {
+  return insertEventForPipeline('content', jobId, status, message, metadata)
 }
