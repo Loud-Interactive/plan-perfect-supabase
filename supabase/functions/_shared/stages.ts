@@ -9,9 +9,24 @@ export interface StageInfo {
   dead_lettered_at?: string
 }
 
-export async function startStage(jobId: string, stage: string): Promise<StageInfo> {
+type Pipeline = 'content' | 'pageperfect'
+
+function getStagesTable(pipeline: Pipeline): string {
+  return pipeline === 'content' ? 'content_job_stages' : 'pageperfect_job_stages'
+}
+
+function getJobsTable(pipeline: Pipeline): string {
+  return pipeline === 'content' ? 'content_jobs' : 'pageperfect_jobs'
+}
+
+export async function startStageForPipeline(
+  pipeline: Pipeline,
+  jobId: string,
+  stage: string
+): Promise<StageInfo> {
+  const stagesTable = getStagesTable(pipeline)
   const { data, error } = await supabaseAdmin
-    .from('content_job_stages')
+    .from(stagesTable)
     .select('attempt_count, max_attempts, retry_delay_seconds, priority, status, dead_lettered_at')
     .eq('job_id', jobId)
     .eq('stage', stage)
@@ -24,7 +39,7 @@ export async function startStage(jobId: string, stage: string): Promise<StageInf
   const priority = data?.priority ?? 0
 
   const { error: upsertError } = await supabaseAdmin
-    .from('content_job_stages')
+    .from(stagesTable)
     .upsert({
       job_id: jobId,
       stage,
@@ -39,7 +54,7 @@ export async function startStage(jobId: string, stage: string): Promise<StageInf
     })
 
   if (error || upsertError) {
-    console.error('Failed to start stage', stage, error ?? upsertError)
+    console.error(`Failed to start ${pipeline} stage`, stage, error ?? upsertError)
   }
 
   return {
@@ -51,10 +66,13 @@ export async function startStage(jobId: string, stage: string): Promise<StageInf
   }
 }
 
-export async function completeStage(jobId: string, stage: string) {
+export async function completeStageForPipeline(pipeline: Pipeline, jobId: string, stage: string) {
+  const stagesTable = getStagesTable(pipeline)
+  const jobsTable = getJobsTable(pipeline)
   const finishedAt = new Date().toISOString()
+  
   const { error } = await supabaseAdmin
-    .from('content_job_stages')
+    .from(stagesTable)
     .update({
       status: 'completed',
       finished_at: finishedAt,
@@ -65,11 +83,11 @@ export async function completeStage(jobId: string, stage: string) {
     .eq('stage', stage)
 
   if (error) {
-    console.error('Failed to mark stage complete', stage, error)
+    console.error(`Failed to mark ${pipeline} stage complete`, stage, error)
   }
 
   await supabaseAdmin
-    .from('content_jobs')
+    .from(jobsTable)
     .update({
       status: 'processing',
       last_completed_at: finishedAt,
@@ -77,10 +95,18 @@ export async function completeStage(jobId: string, stage: string) {
     .eq('id', jobId)
 }
 
-export async function failStage(jobId: string, stage: string, error: unknown) {
+export async function failStageForPipeline(
+  pipeline: Pipeline,
+  jobId: string,
+  stage: string,
+  error: unknown
+) {
+  const stagesTable = getStagesTable(pipeline)
+  const jobsTable = getJobsTable(pipeline)
   const finishedAt = new Date().toISOString()
+  
   const { data } = await supabaseAdmin
-    .from('content_job_stages')
+    .from(stagesTable)
     .select('attempt_count, max_attempts, retry_delay_seconds')
     .eq('job_id', jobId)
     .eq('stage', stage)
@@ -92,7 +118,7 @@ export async function failStage(jobId: string, stage: string, error: unknown) {
   const nextRetryAt = new Date(Date.now() + retryDelay * 1000 * Math.pow(2, Math.min(attemptCount, 5)))
 
   const { error: updateError } = await supabaseAdmin
-    .from('content_job_stages')
+    .from(stagesTable)
     .update({
       status: attemptCount >= maxAttempts ? 'failed' : 'error',
       finished_at: finishedAt,
@@ -103,11 +129,11 @@ export async function failStage(jobId: string, stage: string, error: unknown) {
     .eq('stage', stage)
 
   if (updateError) {
-    console.error('Failed to record stage failure', stage, updateError)
+    console.error(`Failed to record ${pipeline} stage failure`, stage, updateError)
   }
 
   await supabaseAdmin
-    .from('content_jobs')
+    .from(jobsTable)
     .update({
       status: attemptCount >= maxAttempts ? 'failed' : 'error',
       last_failed_at: finishedAt,
@@ -115,9 +141,14 @@ export async function failStage(jobId: string, stage: string, error: unknown) {
     .eq('id', jobId)
 }
 
-export async function shouldDeadLetter(jobId: string, stage: string): Promise<boolean> {
+export async function shouldDeadLetterForPipeline(
+  pipeline: Pipeline,
+  jobId: string,
+  stage: string
+): Promise<boolean> {
+  const stagesTable = getStagesTable(pipeline)
   const { data } = await supabaseAdmin
-    .from('content_job_stages')
+    .from(stagesTable)
     .select('attempt_count, max_attempts')
     .eq('job_id', jobId)
     .eq('stage', stage)
@@ -126,4 +157,21 @@ export async function shouldDeadLetter(jobId: string, stage: string): Promise<bo
   if (!data) return false
 
   return data.attempt_count >= data.max_attempts
+}
+
+// Legacy content pipeline helpers (for backward compatibility)
+export async function startStage(jobId: string, stage: string): Promise<StageInfo> {
+  return startStageForPipeline('content', jobId, stage)
+}
+
+export async function completeStage(jobId: string, stage: string) {
+  return completeStageForPipeline('content', jobId, stage)
+}
+
+export async function failStage(jobId: string, stage: string, error: unknown) {
+  return failStageForPipeline('content', jobId, stage, error)
+}
+
+export async function shouldDeadLetter(jobId: string, stage: string): Promise<boolean> {
+  return shouldDeadLetterForPipeline('content', jobId, stage)
 }
