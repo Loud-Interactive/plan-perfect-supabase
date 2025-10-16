@@ -68,11 +68,8 @@ export async function enqueueJob(
 
   if (error) {
     console.error('Failed to enqueue stage', error)
-    if (getPipelineForQueue(queue) === 'pageperfect') {
-      await insertEventForPipeline('pageperfect', jobId, 'error', 'enqueue_stage_failed', { stage, error, queue })
-    } else {
-      await insertEvent(jobId, 'error', 'enqueue_stage_failed', { stage, error, queue })
-    }
+    const pipeline = getPipelineForQueue(queue)
+    await insertEventForPipeline(pipeline, jobId, 'error', 'enqueue_stage_failed', { stage, error, queue })
     throw error
   }
 

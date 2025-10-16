@@ -19,6 +19,56 @@ function getEventsTable(pipeline: Pipeline) {
   return pipeline === 'content' ? 'content_job_events' : 'pageperfect_job_events'
 }
 
+function toNumber(value: unknown): number | undefined {
+  if (typeof value === 'number') return value
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : undefined
+  }
+  return undefined
+}
+
+export interface MetricPayload {
+  jobId?: string
+  stage: string
+  metricType: string
+  value: number
+  messageId?: number
+  attempt?: number
+  priority?: number
+  metadata?: Record<string, unknown>
+}
+
+export async function recordMetric({
+  jobId,
+  stage,
+  metricType,
+  value,
+  messageId,
+  attempt,
+  priority,
+  metadata,
+}: MetricPayload) {
+  if (!stage || !metricType) {
+    return
+  }
+
+  const { error } = await supabaseAdmin.rpc('record_job_metric', {
+    p_job_id: jobId ?? null,
+    p_stage: stage,
+    p_metric_type: metricType,
+    p_metric_value: value,
+    p_message_id: messageId ?? null,
+    p_attempt_count: attempt ?? null,
+    p_priority: priority ?? null,
+    p_metadata: metadata ?? {},
+  })
+
+  if (error) {
+    console.error('Failed to record metric', { jobId, stage, metricType, value }, error)
+  }
+}
+
 export async function insertEventForPipeline(
   pipeline: Pipeline,
   jobId: string,
@@ -27,6 +77,30 @@ export async function insertEventForPipeline(
   metadata: Record<string, unknown> = {},
   stage?: string
 ) {
+  const timestamp = new Date().toISOString()
+  const attemptVal = toNumber((metadata as Record<string, unknown>)?.attempt ?? (metadata as Record<string, unknown>)?.attempt_count)
+  const messageId = toNumber((metadata as Record<string, unknown>)?.message_id ?? (metadata as Record<string, unknown>)?.msg_id)
+  const latencyMs = toNumber((metadata as Record<string, unknown>)?.latency_ms ?? (metadata as Record<string, unknown>)?.latency)
+  const priority = toNumber((metadata as Record<string, unknown>)?.priority)
+  const queue = typeof (metadata as Record<string, unknown>)?.queue === 'string' ? String((metadata as Record<string, unknown>).queue) : undefined
+
+  const logPayload = {
+    type: 'job_event',
+    pipeline,
+    job_id: jobId,
+    stage,
+    status,
+    message,
+    attempt: attemptVal,
+    message_id: messageId,
+    latency_ms: latencyMs,
+    priority,
+    queue,
+    timestamp,
+  }
+
+  console.log(JSON.stringify({ ...logPayload, metadata }))
+
   const { error } = await supabaseAdmin.from(getEventsTable(pipeline)).insert({
     job_id: jobId ?? null,
     stage: stage ?? null,
@@ -34,8 +108,28 @@ export async function insertEventForPipeline(
     message,
     metadata,
   })
+  
   if (error) {
     console.error(`Failed to insert ${pipeline} job event`, error)
+  }
+
+  // Record metrics for content pipeline only (observability focus)
+  if (pipeline === 'content' && stage && (status === 'error' || status === 'failed')) {
+    await recordMetric({
+      jobId,
+      stage,
+      metricType: 'failure',
+      value: 1,
+      messageId,
+      attempt: attemptVal,
+      priority,
+      metadata: {
+        status,
+        message,
+        latency_ms: latencyMs,
+        queue,
+      },
+    })
   }
 }
 
