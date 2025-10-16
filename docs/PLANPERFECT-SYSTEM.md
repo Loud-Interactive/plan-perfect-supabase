@@ -408,6 +408,78 @@ const work = (async () => {
 - Archives job data
 - Cleanup temporary resources
 
+## Dispatcher & Horizontal Scaling
+
+To keep queue throughput balanced across stages we run a dedicated **Content Queue Dispatcher**:
+
+- **Edge Function**: `content-queue-dispatcher`
+- **Supabase Cron**: `planperfect-content-queue-dispatcher` (fires every minute)
+- **Configuration Table**: `content_stage_config`
+- **Manual Trigger Script**: `scripts/trigger-content-dispatcher.ts`
+
+### How the Dispatcher Works
+
+1. `content_stage_config` stores the queue, worker endpoint, and max concurrency per stage.
+2. `get_content_stage_backlog()` aggregates queued vs. in-flight counts from `content_job_stages`.
+3. The dispatcher reads env overrides (see `CONTENT_STAGE_<STAGE>_MAX_CONCURRENCY`) and merges with table values.
+4. Available slots trigger `trigger_content_worker`, which issues a `net.http_post` to the target worker function.
+
+### Operational Playbooks
+
+| Scenario | Action |
+|----------|--------|
+| **Scale up a stage** | Update `content_stage_config.max_concurrency` or set env `CONTENT_STAGE_<STAGE>_MAX_CONCURRENCY`; the dispatcher reacts on next cycle. |
+| **Pause a stage** | Set `enabled = false` for the stage or temporary env override to `0`. |
+| **Force immediate drain** | Run `deno run --allow-net --allow-env scripts/trigger-content-dispatcher.ts` to kick the dispatcher manually. |
+| **Check backlog** | Execute `select * from get_content_stage_backlog();` to inspect queued vs. in-flight counts. |
+
+The dispatcher logs attempts and produces structured responses to support observability dashboards.
+
+### Example SQL Queries
+
+**View current stage configuration:**
+```sql
+select stage, max_concurrency, enabled, worker_endpoint
+from content_stage_config
+order by stage;
+```
+
+**Check stage backlog:**
+```sql
+select * from get_content_stage_backlog()
+order by ready_count desc;
+```
+
+**Increase concurrency for research stage:**
+```sql
+update content_stage_config
+set max_concurrency = 10
+where stage = 'research';
+```
+
+**Disable a stage temporarily:**
+```sql
+update content_stage_config
+set enabled = false
+where stage = 'draft';
+```
+
+**View recent dispatcher events:**
+```sql
+select created_at, stage, message, metadata
+from content_job_events
+where status = 'dispatched'
+order by created_at desc
+limit 20;
+```
+
+**Check cron job status:**
+```sql
+select jobname, schedule, active, last_run
+from cron.job
+where jobname like '%dispatcher%';
+```
+
 ## Error Handling & Retry Logic
 
 ### Retry Mechanism
