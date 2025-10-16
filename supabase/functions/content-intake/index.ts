@@ -1,12 +1,14 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { supabaseAdmin, insertEvent } from '../_shared/client.ts'
-import { enqueueJob } from '../_shared/queue.ts'
 
 interface IntakeRequest {
   job_type?: string
   requester_email?: string
   payload?: Record<string, unknown>
   initial_stage?: string
+  priority?: number
+  max_attempts?: number
+  retry_delay_seconds?: number
 }
 
 const corsHeaders = {
@@ -35,18 +37,20 @@ serve(async (req) => {
 
     const payload = body.payload ?? {}
     const initialStage = body.initial_stage ?? 'research'
+    const priority = body.priority ?? 0
+    const maxAttempts = body.max_attempts ?? 5
+    const retryDelaySeconds = body.retry_delay_seconds ?? 60
 
-    const { data, error } = await supabaseAdmin
-      .from('content_jobs')
-      .insert({
-        job_type: jobType,
-        requester_email: body.requester_email,
-        payload,
-        status: 'queued',
-        stage: initialStage,
-      })
-      .select('id')
-      .single()
+    const { data, error } = await supabaseAdmin.rpc('create_content_job', {
+      p_job_type: jobType,
+      p_requester_email: body.requester_email,
+      p_payload: payload,
+      p_initial_stage: initialStage,
+      p_priority: priority,
+      p_max_attempts: maxAttempts,
+      p_retry_delay_seconds: retryDelaySeconds,
+      p_queue_override: jobType === 'schema' ? 'schema' : null,
+    })
 
     if (error || !data) {
       console.error('Failed to insert job', error)
@@ -56,10 +60,13 @@ serve(async (req) => {
       })
     }
 
-    const jobId = data.id as string
-    await insertEvent(jobId, 'queued', 'Job queued by intake', { payload_keys: Object.keys(payload) })
-
-    await enqueueJob(jobType === 'schema' ? 'schema' : 'content', jobId, initialStage, payload)
+    const jobId = data as string
+    await insertEvent(jobId, 'queued', 'Job queued by intake', {
+      payload_keys: Object.keys(payload),
+      priority,
+      max_attempts: maxAttempts,
+      retry_delay_seconds: retryDelaySeconds,
+    })
 
     return new Response(JSON.stringify({ job_id: jobId, status: 'queued', stage: initialStage }), {
       status: 202,
