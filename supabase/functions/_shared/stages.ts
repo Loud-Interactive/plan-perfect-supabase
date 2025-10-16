@@ -25,6 +25,17 @@ export interface StageCompletionContext {
   messageId?: number
 }
 
+export interface StageFailureInfo {
+  attemptCount: number
+  maxAttempts: number
+  retryDelaySeconds: number
+  priority: number
+  stageStatus: 'error' | 'failed'
+  willRetry: boolean
+  nextRetryAt?: string | null
+  finishedAt: string
+}
+
 function getStagesTable(pipeline: Pipeline): string {
   return pipeline === 'content' ? 'content_job_stages' : 'pageperfect_job_stages'
 }
@@ -240,7 +251,7 @@ export async function failStageForPipeline(
   stage: string,
   error: unknown,
   context: StageCompletionContext = {}
-) {
+): Promise<StageFailureInfo> {
   const stagesTable = getStagesTable(pipeline)
   const jobsTable = getJobsTable(pipeline)
   const finishedAt = new Date()
@@ -257,15 +268,19 @@ export async function failStageForPipeline(
   const maxAttempts = data?.max_attempts ?? 5
   const retryDelay = data?.retry_delay_seconds ?? 60
   const priority = data?.priority ?? 0
-  const nextRetryAt = new Date(Date.now() + retryDelay * 1000 * Math.pow(2, Math.min(attemptCount, 5)))
+  const backoffPower = Math.min(attemptCount, 5)
+  const nextRetryAt = new Date(Date.now() + retryDelay * 1000 * Math.pow(2, backoffPower))
+  const willRetry = attemptCount < maxAttempts
+  const stageStatus: 'error' | 'failed' = willRetry ? 'error' : 'failed'
+  const nextRetryIso = willRetry ? nextRetryAt.toISOString() : null
 
   const { error: updateError } = await supabaseAdmin
     .from(stagesTable)
     .update({
-      status: attemptCount >= maxAttempts ? 'failed' : 'error',
+      status: stageStatus,
       finished_at: finishedIso,
       last_error: error,
-      next_retry_at: attemptCount < maxAttempts ? nextRetryAt.toISOString() : null,
+      next_retry_at: nextRetryIso,
     })
     .eq('job_id', jobId)
     .eq('stage', stage)
@@ -277,7 +292,7 @@ export async function failStageForPipeline(
   await supabaseAdmin
     .from(jobsTable)
     .update({
-      status: attemptCount >= maxAttempts ? 'failed' : 'error',
+      status: stageStatus,
       last_failed_at: finishedIso,
     })
     .eq('id', jobId)
@@ -314,9 +329,9 @@ export async function failStageForPipeline(
       priority,
       metadata: buildMetricMetadata(
         {
-          status: attemptCount >= maxAttempts ? 'failed' : 'error',
+          status: stageStatus,
           error: formattedError,
-          will_retry: attemptCount < maxAttempts,
+          will_retry: willRetry,
         },
         { queue: context.queue }
       ),
@@ -337,6 +352,17 @@ export async function failStageForPipeline(
         ),
       })
     }
+  }
+
+  return {
+    attemptCount,
+    maxAttempts,
+    retryDelaySeconds: retryDelay,
+    priority,
+    stageStatus,
+    willRetry,
+    nextRetryAt: nextRetryIso,
+    finishedAt: finishedIso,
   }
 }
 

@@ -67,7 +67,39 @@ graph TD
    - `content_events`: Granular event logging
    - `content_stages`: Stage execution tracking
 
-## Detailed Workflow
+ ### Worker Execution Contract
+
+ All content workers share a common execution contract implemented in `_shared/stage-runner.ts`.
+ This helper wraps queue dequeueing, stage lifecycle tracking, exponential backoff, and failure
+ classification so individual workers can focus on business logic. Key expectations:
+
+ - Workers dequeue batches of messages using `CONTENT_QUEUE_BATCH_SIZE` (default: 5, heavy stages
+   such as export use smaller overrides) to improve throughput while keeping execution within the
+   Cloudflare Edge limits.
+
+   queue visibility window. The handler returns `{ complete: boolean }` to indicate whether the
+   stage is fully complete or should continue processing in subsequent messages.
+ - `_shared/errors.ts` provides `FatalStageError` and `RetryableStageError` helpers. Throwing a
+   `FatalStageError` marks the stage as failed immediately and routes the message to
+   `content_dead_letters`. Other errors are retried with exponential backoff using the shared
+   retry strategies until `CONTENT_STAGE_MAX_ATTEMPTS` is exhausted.
+ - Stage attempts and failure metadata are persisted via `_shared/stages.ts`. When max attempts are
+   exceeded the job status is promoted to `failed` and the message is persisted to
+   `content_dead_letters` for manual inspection.
+ - External API or storage calls (e.g. Supabase Storage uploads, Google Drive exports, transactional
+   e-mail) must be wrapped with `retryExternalAPI` to take advantage of the standardized retry
+   policy and structured logging.
+
+ **Relevant environment variables**
+
+ | Variable | Purpose | Default |
+ | --- | --- | --- |
+ | `CONTENT_QUEUE_VISIBILITY` | Visibility timeout (seconds) for dequeued messages | `600` |
+ | `CONTENT_QUEUE_BATCH_SIZE` | Number of messages dequeued per worker invocation | `5` |
+ | `CONTENT_STAGE_MAX_ATTEMPTS` | Maximum persisted attempts before a stage is failed | `3` |
+ | `CONTENT_STAGE_HANDLER_MAX_RETRIES` | In-process retries within a single invocation | `1` |
+
+ ## Detailed Workflow
 
 ### Stage 1: Content Intake
 
