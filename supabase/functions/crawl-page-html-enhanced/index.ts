@@ -27,6 +27,11 @@ interface CrawlResult {
   crawlMethod: string;
   error?: string;
   crossDomainCanonical?: string;
+  pageId?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  cached?: boolean;
+  cacheAge?: number; // Age in days
 }
 
 const MAX_REDIRECTS = 5;
@@ -60,6 +65,67 @@ serve(async (req) => {
     }
 
     console.log(`🔍 Enhanced crawling URL: ${url}`);
+
+    // STEP 0: Check if we have recent cached data (within 2 weeks)
+    try {
+      const twoWeeksAgo = new Date();
+      twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+      const twoWeeksAgoISO = twoWeeksAgo.toISOString();
+      
+      console.log(`📦 Checking for cached data newer than ${twoWeeksAgoISO}...`);
+      
+      const { data: cachedPage, error: cacheError } = await supabaseClient
+        .from('pages')
+        .select('id, url, html, html_length, title, description, http_status, canonical_url, original_url, redirect_chain, last_crawled, created_at, updated_at')
+        .eq('url', url)
+        .gte('last_crawled', twoWeeksAgoISO)
+        .not('html', 'is', null)
+        .single();
+      
+      if (!cacheError && cachedPage && cachedPage.html && cachedPage.html.length > 100) {
+        console.log(`✅ Found fresh cached data from ${cachedPage.last_crawled} (Page ID: ${cachedPage.id})`);
+        console.log(`   - HTTP Status: ${cachedPage.http_status || 'N/A'}`);
+        console.log(`   - HTML Length: ${cachedPage.html_length || cachedPage.html.length} chars`);
+        console.log(`   - Using cached data instead of re-crawling`);
+        
+        // Return cached data with full page information
+        return new Response(
+          JSON.stringify({
+            success: true,
+            originalUrl: url,
+            finalUrl: cachedPage.url,
+            canonicalUrl: cachedPage.canonical_url || cachedPage.url,
+            httpStatus: cachedPage.http_status || 200,
+            contentLength: cachedPage.html_length || cachedPage.html.length,
+            html: cachedPage.html,
+            title: cachedPage.title,
+            description: cachedPage.description,
+            redirectChain: cachedPage.redirect_chain || [],
+            crawlMethod: 'cached',
+            pageId: cachedPage.id,
+            createdAt: cachedPage.created_at,
+            updatedAt: cachedPage.updated_at,
+            cached: true,
+            cacheAge: Math.floor((Date.now() - new Date(cachedPage.last_crawled).getTime()) / 1000 / 60 / 60 / 24) // Age in days
+          }),
+          {
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json',
+              'X-Cache': 'HIT',
+              'X-Cache-Age': cachedPage.last_crawled
+            },
+          }
+        );
+      } else {
+        console.log(`📭 No fresh cached data found, proceeding with crawl`);
+        if (cacheError && cacheError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+          console.log(`   Cache check error: ${cacheError.message}`);
+        }
+      }
+    } catch (cacheCheckError) {
+      console.log(`⚠️ Cache check failed: ${cacheCheckError.message}, proceeding with crawl`);
+    }
 
     const result: CrawlResult = {
       success: false,
@@ -187,7 +253,7 @@ serve(async (req) => {
       console.log(`💾 Storing enhanced data in database...`);
       
       try {
-        const { error } = await supabaseClient
+        const { data: pageData, error } = await supabaseClient
           .from('pages')
           .upsert({
             url: result.canonicalUrl, // Store canonical URL as the main URL
@@ -202,13 +268,14 @@ serve(async (req) => {
             last_crawled: new Date().toISOString(),
           }, {
             onConflict: 'url'
-          });
+          })
+          .select('id, url, created_at, updated_at');
 
         if (error) {
           console.log(`⚠️ Database error (columns may not exist yet): ${error.message}`);
           
           // Fallback: store without enhanced fields
-          await supabaseClient
+          const { data: fallbackData, error: fallbackError } = await supabaseClient
             .from('pages')
             .upsert({
               url: result.canonicalUrl,
@@ -219,11 +286,22 @@ serve(async (req) => {
               last_crawled: new Date().toISOString(),
             }, {
               onConflict: 'url'
-            });
+            })
+            .select('id, url, created_at, updated_at');
           
-          console.log(`✅ Stored with basic fields (enhanced fields need to be added to schema)`);
-        } else {
-          console.log(`✅ Stored with enhanced canonical tracking`);
+          if (!fallbackError && fallbackData && fallbackData.length > 0) {
+            result.pageId = fallbackData[0].id;
+            result.createdAt = fallbackData[0].created_at;
+            result.updatedAt = fallbackData[0].updated_at;
+            console.log(`✅ Stored with basic fields (enhanced fields need to be added to schema) - Page ID: ${result.pageId}`);
+          } else {
+            console.log(`⚠️ Fallback also had issues, but page may have been stored`);
+          }
+        } else if (pageData && pageData.length > 0) {
+          result.pageId = pageData[0].id;
+          result.createdAt = pageData[0].created_at;
+          result.updatedAt = pageData[0].updated_at;
+          console.log(`✅ Stored with enhanced canonical tracking - Page ID: ${result.pageId}`);
         }
       } catch (dbError) {
         console.error(`❌ Database error: ${dbError}`);

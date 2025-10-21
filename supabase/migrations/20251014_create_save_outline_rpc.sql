@@ -17,7 +17,7 @@ BEGIN
   -- Check if record exists by casting TEXT to UUID
   SELECT EXISTS(
     SELECT 1 FROM content_plan_outlines
-    WHERE guid = p_guid::uuid
+    WHERE guid = p_guid
   ) INTO v_exists;
 
   IF v_exists THEN
@@ -25,7 +25,7 @@ BEGIN
     UPDATE content_plan_outlines SET
       content_plan_guid = CASE
         WHEN p_content_plan_guid IS NULL OR p_content_plan_guid = '' THEN NULL
-        ELSE p_content_plan_guid::uuid
+        ELSE p_content_plan_guid
       END,
       post_title = p_post_title,
       domain = p_domain,
@@ -33,7 +33,7 @@ BEGIN
       outline = p_outline,
       status = p_status,
       updated_at = now()
-    WHERE guid = p_guid::uuid;
+    WHERE guid = p_guid;
   ELSE
     -- Insert new record
     INSERT INTO content_plan_outlines (
@@ -47,10 +47,10 @@ BEGIN
       created_at,
       updated_at
     ) VALUES (
-      p_guid::uuid,
+      p_guid,
       CASE
         WHEN p_content_plan_guid IS NULL OR p_content_plan_guid = '' THEN NULL
-        ELSE p_content_plan_guid::uuid
+        ELSE p_content_plan_guid
       END,
       p_post_title,
       p_domain,
@@ -73,4 +73,4 @@ $$;
 -- Grant execute permission
 GRANT EXECUTE ON FUNCTION save_outline TO anon, authenticated, service_role;
 
-COMMENT ON FUNCTION save_outline IS 'Saves outline to content_plan_outlines table with proper UUID casting';
+COMMENT ON FUNCTION save_outline IS 'Saves outline to content_plan_outlines table - TEXT columns, no casting needed';

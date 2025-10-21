@@ -116,7 +116,7 @@ create index if not exists content_dead_letters_routed_idx
 -- ========================================
 -- 4. Helper function to coalesce integers > 0
 -- ========================================
-create or replace function public.greatest_positive_int(values integer[])
+create or replace function public.greatest_positive_int(p_values integer[])
 returns integer
 language plpgsql
 as $$
@@ -124,7 +124,7 @@ declare
   v_result integer := 0;
   v_value integer;
 begin
-  foreach v_value in array values
+  foreach v_value in array p_values
   loop
     if v_value is not null and v_value > v_result then
       v_result := v_value;
@@ -249,6 +249,8 @@ $$;
 -- ========================================
 -- 6. Enhanced dequeue_stage (single)
 -- ========================================
+drop function if exists public.dequeue_stage(text, integer) cascade;
+
 create or replace function public.dequeue_stage(
   p_queue text,
   p_visibility_seconds integer default 600
@@ -262,7 +264,8 @@ declare
   v_stage text;
   v_now timestamptz := now();
 begin
-  select * into v_record from pgmq.pop(p_queue, greatest(p_visibility_seconds, 1));
+  -- FIXED for pgmq 1.4.4+: use read() instead of pop()
+  select * into v_record from pgmq.read(p_queue, greatest(p_visibility_seconds, 1), 1);
 
   if not found or v_record.msg_id is null then
     return;
@@ -288,6 +291,8 @@ $$;
 -- ========================================
 -- 7. Batch dequeue RPC leveraging pgmq.pop in a loop
 -- ========================================
+drop function if exists public.dequeue_stage_batch(text, integer, integer) cascade;
+
 create or replace function public.dequeue_stage_batch(
   p_queue text,
   p_visibility_seconds integer default 600,
@@ -304,7 +309,8 @@ declare
   v_now timestamptz := now();
 begin
   while v_counter < greatest(p_batch_size, 1) loop
-    select * into v_record from pgmq.pop(p_queue, greatest(p_visibility_seconds, 1));
+    -- FIXED for pgmq 1.4.4+: use read() instead of pop()
+    select * into v_record from pgmq.read(p_queue, greatest(p_visibility_seconds, 1), 1);
     exit when not found or v_record.msg_id is null;
 
     v_job_id := (v_record.message->>'job_id')::uuid;
@@ -500,15 +506,8 @@ $$;
 -- ========================================
 -- 12. Archive helper (retain existing behavior)
 -- ========================================
-create or replace function public.archive_message(
-  p_queue text,
-  p_msg_id bigint
-)
-returns void
-language sql
-as $$
-  select pgmq.archive(p_queue, p_msg_id);
-$$;
+-- Note: Already created in 20250919_content_jobs.sql with boolean return type
+-- Skipping redefinition to avoid conflicts
 
 -- ========================================
 -- 13. Batch archive helper for acking multiple messages
@@ -519,7 +518,7 @@ create or replace function public.archive_messages(
 )
 returns void
 language plpgsql
-as $
+as $$
 declare
   v_msg_id bigint;
 begin
@@ -528,7 +527,7 @@ begin
     perform pgmq.archive(p_queue, v_msg_id);
   end loop;
 end;
-$;
+$$;
 
 -- ========================================
 -- 14. Transactional job creation helper
@@ -545,7 +544,7 @@ create or replace function public.create_content_job(
 )
 returns uuid
 language plpgsql
-as $
+as $$
 declare
   v_job_id uuid;
   v_stage text := coalesce(p_initial_stage, 'research');
@@ -589,7 +588,7 @@ begin
 
   return v_job_id;
 end;
-$;
+$$;
 
 -- ========================================
 -- 15. Permission grants

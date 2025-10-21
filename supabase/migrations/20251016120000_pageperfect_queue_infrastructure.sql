@@ -157,10 +157,12 @@ comment on table public.pageperfect_payloads is 'Stage-specific payload data for
 -- ========================================
 -- 7. Create update trigger for updated_at columns
 -- ========================================
+drop trigger if exists trg_pageperfect_jobs_updated on public.pageperfect_jobs;
 create trigger trg_pageperfect_jobs_updated
 before update on public.pageperfect_jobs
 for each row execute procedure public.set_updated_at();
 
+drop trigger if exists trg_pageperfect_payloads_updated on public.pageperfect_payloads;
 create trigger trg_pageperfect_payloads_updated
 before update on public.pageperfect_payloads
 for each row execute procedure public.set_updated_at();
@@ -387,6 +389,8 @@ begin
 end;
 $;
 
+drop function if exists public.pageperfect_dequeue_stage(text, integer) cascade;
+
 create or replace function public.pageperfect_dequeue_stage(
   p_queue text,
   p_visibility_seconds integer default 600
@@ -400,7 +404,8 @@ declare
   v_stage text;
   v_now timestamptz := now();
 begin
-  select * into v_record from pgmq.pop(p_queue, greatest(p_visibility_seconds, 1));
+  -- FIXED for pgmq 1.4.4+: use read() instead of pop()
+  select * into v_record from pgmq.read(p_queue, greatest(p_visibility_seconds, 1), 1);
 
   if not found or v_record.msg_id is null then
     return;
@@ -423,6 +428,8 @@ begin
 end;
 $;
 
+drop function if exists public.pageperfect_dequeue_stage_batch(text, integer, integer) cascade;
+
 create or replace function public.pageperfect_dequeue_stage_batch(
   p_queue text,
   p_visibility_seconds integer default 600,
@@ -439,7 +446,8 @@ declare
   v_now timestamptz := now();
 begin
   while v_counter < greatest(p_batch_size, 1) loop
-    select * into v_record from pgmq.pop(p_queue, greatest(p_visibility_seconds, 1));
+    -- FIXED for pgmq 1.4.4+: use read() instead of pop()
+    select * into v_record from pgmq.read(p_queue, greatest(p_visibility_seconds, 1), 1);
     exit when not found or v_record.msg_id is null;
 
     v_job_id := (v_record.message->>'job_id')::uuid;

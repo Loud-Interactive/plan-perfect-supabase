@@ -2,6 +2,12 @@
 
 create extension if not exists pgmq;
 
+-- Grant permissions for pgmq schema (required for edge functions)
+grant usage on schema pgmq to postgres, anon, authenticated, service_role;
+grant execute on all functions in schema pgmq to postgres, anon, authenticated, service_role;
+grant all on all tables in schema pgmq to postgres, service_role;
+grant all on all sequences in schema pgmq to postgres, service_role;
+
 create table if not exists public.content_jobs (
     id uuid primary key default gen_random_uuid(),
     job_type text not null,
@@ -67,10 +73,12 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists trg_content_jobs_updated on public.content_jobs;
 create trigger trg_content_jobs_updated
 before update on public.content_jobs
 for each row execute procedure public.set_updated_at();
 
+drop trigger if exists trg_content_payloads_updated on public.content_payloads;
 create trigger trg_content_payloads_updated
 before update on public.content_payloads
 for each row execute procedure public.set_updated_at();
@@ -88,15 +96,35 @@ as $$
   ));
 $$;
 
+-- FIXED for pgmq 1.4.4+: Drop old function and recreate with correct signature
+drop function if exists public.dequeue_stage(text, integer) cascade;
+
 create or replace function public.dequeue_stage(p_queue text, p_visibility integer default 600)
 returns table(msg_id bigint, message jsonb)
 language sql
 as $$
-  select * from pgmq.pop(p_queue, p_visibility);
+  select msg_id, message from pgmq.read(p_queue, p_visibility::integer, 1);
 $$;
 
+-- Drop archive_message (return type changed from void to boolean)
+-- Use DO block to forcibly drop regardless of errors
+do $$ 
+begin
+  -- Try to drop the function with CASCADE to handle any dependencies
+  execute 'drop function if exists public.archive_message(text, bigint) cascade';
+exception 
+  when others then
+    -- If that fails, try dropping without CASCADE
+    begin
+      execute 'drop function if exists public.archive_message(text, bigint)';
+    exception
+      when others then
+        null; -- Ignore any errors, function will be replaced
+    end;
+end $$;
+
 create or replace function public.archive_message(p_queue text, p_msg_id bigint)
-returns void
+returns boolean
 language sql
 as $$
   select pgmq.archive(p_queue, p_msg_id);
@@ -126,6 +154,7 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists trg_content_jobs_init_stages on public.content_jobs;
 create trigger trg_content_jobs_init_stages
 after insert on public.content_jobs
 for each row execute procedure public.init_content_job_stages();
@@ -152,6 +181,7 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists trg_content_job_events_alert on public.content_job_events;
 create trigger trg_content_job_events_alert
 after insert on public.content_job_events
 for each row execute procedure public.notify_content_job_error();

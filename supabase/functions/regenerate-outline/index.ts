@@ -19,20 +19,62 @@ serve(async (req) => {
   try {
     const requestData = await req.json();
     job_id = requestData.content_plan_outline_guid || requestData.job_id;
-    
+    const fast = requestData.fast || false;
+
     if (!job_id) {
       return new Response(
         JSON.stringify({ error: 'content_plan_outline_guid or job_id is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
-    console.log(`Regenerate outline started for job_id: ${job_id}`);
-    
+
+    console.log(`Regenerate outline started for job_id: ${job_id}, fast=${fast}`);
+
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // If fast mode requested, route to fast-regenerate-outline
+    if (fast) {
+      console.log('Routing to fast-regenerate-outline function');
+
+      const fastResponse = await fetch(`${supabaseUrl}/functions/v1/fast-regenerate-outline`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${supabaseServiceKey}`
+        },
+        body: JSON.stringify({ job_id })
+      });
+
+      if (!fastResponse.ok) {
+        const errorText = await fastResponse.text();
+        console.error(`Fast regeneration failed: ${fastResponse.status}, ${errorText}`);
+
+        // Fall back to slow mode
+        console.log('Fast mode failed, falling back to slow mode');
+        await supabase
+          .from('content_plan_outline_statuses')
+          .insert({
+            outline_guid: job_id,
+            status: 'fast_regeneration_failed_using_slow_mode'
+          });
+        // Continue with slow mode below
+      } else {
+        // Fast mode started successfully
+        const fastResult = await fastResponse.json();
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: 'Fast outline regeneration started',
+            job_id,
+            mode: 'fast'
+          }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
     // Validate that the job exists
     const { data: job, error: jobError } = await supabase
@@ -348,12 +390,13 @@ Format your response as a JSON object with this structure:
       }
     })();
     
-    // Return immediate response
+    // Return immediate response (slow mode)
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        message: 'Outline regeneration process started', 
-        job_id
+      JSON.stringify({
+        success: true,
+        message: 'Outline regeneration process started',
+        job_id,
+        mode: 'slow' // Claude with thinking
       }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

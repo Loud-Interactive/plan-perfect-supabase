@@ -1,4 +1,4 @@
-import { PROMPT_MAP } from '../../../resources/prompts/index.ts'
+import { PROMPT_MAP } from './prompts/defaults.ts'
 import { supabaseAdmin } from './client.ts'
 
 type PromptContext = {

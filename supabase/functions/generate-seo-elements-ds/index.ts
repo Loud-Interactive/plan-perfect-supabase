@@ -512,8 +512,8 @@ serve(async (req)=>{
         console.warn(`Could not parse domain from URL: ${url}`);
         domain = undefined;
       }
-      // Fetch page content using our crawl-page-html function
-      const response = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/crawl-page-html`, {
+      // Fetch page content using our crawl-page-html-enhanced function (with caching)
+      const response = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/crawl-page-html-enhanced`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

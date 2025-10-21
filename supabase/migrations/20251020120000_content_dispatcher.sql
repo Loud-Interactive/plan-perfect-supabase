@@ -48,7 +48,7 @@ returns table (
   inflight_count bigint
 )
 language plpgsql
-as $
+as $$
 begin
   return query
   select
@@ -63,7 +63,7 @@ begin
   group by s.stage
   order by s.stage;
 end;
-$;
+$$;
 
 comment on function public.get_content_stage_backlog is 'Summarises ready/in-flight depth per stage to guide dispatcher scaling';
 
@@ -81,7 +81,7 @@ returns jsonb
 language plpgsql
 security definer
 set search_path = public, net, pg_temp
-as $
+as $$
 declare
   v_headers jsonb := coalesce(
     p_headers,
@@ -109,22 +109,22 @@ begin
 
   return coalesce(v_response, jsonb_build_object('status', 'ok'));
 end;
-$;
+$$;
 
 grant execute on function public.trigger_content_worker(text, text, text, jsonb, jsonb) to service_role;
 
 -- Schedule dispatcher cron job (runs every minute; close enough granularity)
-do $
+do $$
 begin
   if exists (select 1 from cron.job where jobname = 'planperfect-content-queue-dispatcher') then
     perform cron.unschedule('planperfect-content-queue-dispatcher');
   end if;
-end $;
+end $$;
 
 select cron.schedule(
   'planperfect-content-queue-dispatcher',
   '*/1 * * * *',
-  $
+  $$
     select net.http_post(
       'https://jsypctdhynsdqrfifvdh.supabase.co/functions/v1/content-queue-dispatcher',
       jsonb_build_object('source', 'cron'),
@@ -133,5 +133,5 @@ select cron.schedule(
         'Authorization', 'Bearer ' || current_setting('app.settings.edge_function_service_role_key', true)
       )
     );
-  $
+  $$
 );

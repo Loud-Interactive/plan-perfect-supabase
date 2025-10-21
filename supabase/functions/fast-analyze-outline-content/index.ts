@@ -163,6 +163,28 @@ serve(async (req) => {
           tone: pairsData.tone || "",
         };
 
+        // Extract strategic brand elements for outline generation (Phase 2 implementation)
+        const competitors = pairsData.competitors || [];
+        const brand_positioning = pairsData.brand_positioning || "";
+        const target_audience = pairsData.target_audience || "";
+
+        // Build strategic guidance blocks
+        let competitorGuidance = "";
+        if (competitors && competitors.length > 0) {
+          const competitorList = Array.isArray(competitors) ? competitors.join(", ") : competitors;
+          competitorGuidance = `\n**IMPORTANT - COMPETITOR AWARENESS**:\nDo NOT structure sections that would primarily benefit or promote these competitors: ${competitorList}.\nFocus the outline on angles and information that align with ${brandProfile.domain}'s unique value proposition.\n`;
+        }
+
+        let brandPositioningGuidance = "";
+        if (brand_positioning) {
+          brandPositioningGuidance = `\n**BRAND POSITIONING**:\n${brand_positioning}\nStructure the outline to reinforce this positioning.\n`;
+        }
+
+        let targetAudienceGuidance = "";
+        if (target_audience) {
+          targetAudienceGuidance = `\n**TARGET AUDIENCE**:\n${target_audience}\nEnsure section topics are relevant and valuable to this audience.\n`;
+        }
+
         // Step 4: Fetch search results
         const { data: searchResults, error: resultsError } = await supabase
           .from('outline_search_results')
@@ -245,7 +267,19 @@ serve(async (req) => {
           sectionsRequirement = '1. Create 4-5 main content sections (H2 headings)\n2. Each section should have 3-4 subsections (H3 headings)\n3. **DO NOT** include Introduction or Conclusion sections';
         }
 
-        const prompt = `You are creating a content outline for a brand article. Your task is to generate a structured, SEO-optimized outline based on the research provided.
+        // Get current date for prompt context
+        const currentDate = new Date();
+        const formattedDate = currentDate.toLocaleDateString('en-US', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        });
+
+        const prompt = `**CURRENT DATE**: ${formattedDate}
+**IMPORTANT**: Ensure the outline structure and topic selection reflect current trends and information as of this date. Avoid outdated approaches or time-sensitive content that may no longer be relevant.
+
+You are creating a content outline for a brand article. Your task is to generate a structured, SEO-optimized outline based on the research provided.
 
 **Article Information**:
 - Title: "${jobDetails.post_title}"
@@ -255,7 +289,7 @@ serve(async (req) => {
 
 **Brand Profile**:
 ${JSON.stringify(brandProfile, null, 2)}
-
+${competitorGuidance}${brandPositioningGuidance}${targetAudienceGuidance}
 **Content Plan Context**:
 ${contentPlan ? JSON.stringify(contentPlan, null, 2) : 'No content plan data available'}
 

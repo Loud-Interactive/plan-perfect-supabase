@@ -162,6 +162,28 @@ serve(async (req) => {
           tone: pairsData.tone || "",
         };
 
+        // Extract strategic brand elements for outline generation (Phase 2 implementation)
+        const competitors = pairsData.competitors || [];
+        const brand_positioning = pairsData.brand_positioning || "";
+        const target_audience = pairsData.target_audience || "";
+
+        // Build strategic guidance blocks
+        let competitorGuidance = "";
+        if (competitors && competitors.length > 0) {
+          const competitorList = Array.isArray(competitors) ? competitors.join(", ") : competitors;
+          competitorGuidance = `\n**IMPORTANT - COMPETITOR AWARENESS**:\nDo NOT structure searches or prioritize content that would primarily benefit or promote these competitors: ${competitorList}.\nFocus the search on angles and information that align with ${brandProfile.domain}'s unique value proposition.\n`;
+        }
+
+        let brandPositioningGuidance = "";
+        if (brand_positioning) {
+          brandPositioningGuidance = `\n**BRAND POSITIONING**:\n${brand_positioning}\nPrioritize search results that reinforce this positioning.\n`;
+        }
+
+        let targetAudienceGuidance = "";
+        if (target_audience) {
+          targetAudienceGuidance = `\n**TARGET AUDIENCE**:\n${target_audience}\nEnsure search results are relevant and valuable to this audience.\n`;
+        }
+
         // Build Groq prompt
         await supabase
           .from('content_plan_outline_statuses')
@@ -170,12 +192,24 @@ serve(async (req) => {
             status: 'initiating_intelligent_search'
           });
 
-        const prompt = `Use web search to find the top 10 authoritative articles about "${jobDetails.post_keyword}".
+        // Get current date for prompt context
+        const currentDate = new Date();
+        const formattedDate = currentDate.toLocaleDateString('en-US', { 
+          weekday: 'long', 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        });
+
+        const prompt = `**CURRENT DATE**: ${formattedDate}
+**IMPORTANT**: Ensure all search results and information are current and relevant as of this date. Avoid outdated information or references.
+
+Use web search to find the top 10 authoritative articles about "${jobDetails.post_keyword}".
 
 Brand Context:
 ${JSON.stringify(brandProfile, null, 2)}
-
-Search for high-quality articles specifically about "${jobDetails.post_keyword}". Ensure articles are relevant to the brand context above.
+${competitorGuidance}${brandPositioningGuidance}${targetAudienceGuidance}
+Search for high-quality articles specifically about "${jobDetails.post_keyword}". Ensure articles are relevant to the brand context and strategic guidelines above.
 
 For each search result, extract and return the following in JSON format:
 - index (0-9)

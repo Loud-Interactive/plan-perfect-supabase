@@ -86,9 +86,11 @@ serve(async (req) => {
     
     const task = tasks[0];
     console.log(`Found task for outline: ${task.task_id}, domain: ${task.client_domain}`);
-    
+    console.log(`Task status: ${task.status}, live_post_url: ${task.live_post_url || 'none'}`);
+
     // Step 2: Check if task is already published
     if (task.live_post_url) {
+      console.log(`Task already published, returning early`);
       return new Response(
         JSON.stringify({ 
           message: "Content already published to WordPress", 
@@ -101,12 +103,14 @@ serve(async (req) => {
         }
       );
     }
-    
-    // Step 3: Check if the task status is "Complete"
-    if (task.status !== "Complete") {
+
+    // Step 3: Check if the task status is "Complete" or "Completed"
+    console.log(`Checking task status: ${task.status}`);
+    if (task.status !== "Complete" && task.status !== "Completed") {
+      console.log(`Task status is not Complete/Completed, returning early`);
       return new Response(
-        JSON.stringify({ 
-          error: "Task is not ready for publishing", 
+        JSON.stringify({
+          error: "Task is not ready for publishing",
           details: `Current task status is "${task.status}". Only completed tasks can be published.`
         }),
         {
@@ -115,8 +119,9 @@ serve(async (req) => {
         }
       );
     }
-    
+
     // Step 4: Check if the domain has a WordPress API key and get limit info
+    console.log(`Fetching API key info for domain: ${task.client_domain}`);
     const { data: keyInfo, error: keyInfoError } = await supabaseClient
       .rpc('get_api_key_info', {
         p_domain: task.client_domain
@@ -137,8 +142,9 @@ serve(async (req) => {
     }
 
     if (!keyInfo || keyInfo.length === 0) {
+      console.log(`No API key found for domain: ${task.client_domain}, returning early`);
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: `No WordPress API key found for domain: ${task.client_domain}`,
           details: "This domain is not configured for WordPress publishing"
         }),
@@ -148,15 +154,18 @@ serve(async (req) => {
         }
       );
     }
-    
+
     const apiKey = keyInfo[0].api_key;
     const monthlyPostLimit = keyInfo[0].monthly_post_limit;
     const monthlyPostCount = keyInfo[0].monthly_post_count;
-    
+
+    console.log(`Found API key, monthly limit: ${monthlyPostLimit}, current count: ${monthlyPostCount}`);
+
     // Check if monthly post limit has been reached
     if (monthlyPostLimit > 0 && monthlyPostCount >= monthlyPostLimit) {
+      console.log(`Monthly post limit exceeded: ${monthlyPostCount} >= ${monthlyPostLimit}, returning early`);
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: `Monthly post limit of ${monthlyPostLimit} has been reached for domain: ${task.client_domain}`,
           details: `Current count: ${monthlyPostCount}, Limit: ${monthlyPostLimit}. Please try again next month.`,
           limit_exceeded: true
@@ -167,7 +176,9 @@ serve(async (req) => {
         }
       );
     }
-    
+
+    console.log(`All checks passed, proceeding to publish to WordPress`);
+
     // Step 5: Publish the content to WordPress
     try {
       // Prepare endpoint URL
