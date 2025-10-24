@@ -287,8 +287,8 @@ Checking content_plan_outlines for GUID: xxx
 Found URL in outlines table: https://example.com
 Starting schema generation for URL: https://example.com
 
-Step 1: Converting URL to Markdown...
-Successfully converted URL to Markdown (12453 characters)
+Step 1: Converting URL to Markdown with Jina AI...
+Successfully converted URL to Markdown with Jina AI (12453 characters)
 
 Step 2: Extracting domain data...
 Extracted domain: example.com
@@ -352,7 +352,8 @@ Each type includes all required fields per schema.org specifications.
 - **Streaming Response**: Use streaming for better UX
 - **Domain Context**: Automatically fetches domain-specific data from pp-api
 - **AI Model**: Uses Groq's `openai/gpt-oss-120b` for generation
-- **Markdown Conversion**: Uses md.dhr.wtf API for URL → Markdown
+- **Markdown Conversion**: Uses Jina AI Reader API (`r.jina.ai`) for URL → Markdown
+- **Jina AI Key**: Configurable via `JINA_API_KEY` environment variable
 
 ## ✅ Testing Checklist
 

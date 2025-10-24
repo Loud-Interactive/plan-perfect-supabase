@@ -554,15 +554,18 @@ async function streamSchemaGeneration(
         
         controller.enqueue(encoder.encode(`Starting schema generation for URL: ${postUrl}\n\n`))
 
-        // Step 1: Convert URL to Markdown
-        controller.enqueue(encoder.encode("Step 1: Converting URL to Markdown...\n"))
+        // Step 1: Convert URL to Markdown using Jina AI Reader
+        controller.enqueue(encoder.encode("Step 1: Converting URL to Markdown with Jina AI...\n"))
         
         let markdown = ""
         try {
-          const markdownerApiUrl = `https://md.dhr.wtf/?url=${encodeURIComponent(postUrl)}`
-          const markdownResponse = await fetch(markdownerApiUrl, {
+          // Use Jina AI Reader API - prepend r.jina.ai/ to the URL
+          const jinaApiUrl = `https://r.jina.ai/${postUrl}`
+          const jinaApiKey = Deno.env.get('JINA_API_KEY') || 'jina_b7c5a14c8b8f4e2082988e2bf82b9812TiwcBJjXjkk6ohrZCRejYBtvQarA'
+          
+          const markdownResponse = await fetch(jinaApiUrl, {
             headers: {
-              'Authorization': 'Bearer LWdIbnQ4UXhDc0dwX1BvLXNBSEVaLTI='
+              'Authorization': `Bearer ${jinaApiKey}`
             }
           })
           
@@ -572,7 +575,7 @@ async function streamSchemaGeneration(
           }
 
           markdown = await markdownResponse.text()
-          controller.enqueue(encoder.encode(`Successfully converted URL to Markdown (${markdown.length} characters)\n\n`))
+          controller.enqueue(encoder.encode(`Successfully converted URL to Markdown with Jina AI (${markdown.length} characters)\n\n`))
         } catch (error) {
           console.error("Error converting URL to Markdown:", error)
           controller.enqueue(encoder.encode(`Error converting URL to Markdown: ${error}\n`))
