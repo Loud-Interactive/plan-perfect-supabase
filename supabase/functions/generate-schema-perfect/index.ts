@@ -2,6 +2,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { Groq } from 'npm:groq-sdk'
+import { notifySchemaGenerated } from '../_shared/webhook-integration.ts'
 
 // Schema type definitions and examples
 const SCHEMA_EXAMPLES = {
@@ -294,6 +295,72 @@ function extractRootDomain(url: string): string {
   }
 }
 
+// Clean JSON output by removing leading invalid characters
+function cleanJsonOutput(text: string): string {
+  // Find the first occurrence of opening brace
+  const firstBrace = text.indexOf('{');
+  if (firstBrace === -1) {
+    return text; // No JSON found, return as-is
+  }
+  
+  // Remove everything before the first brace
+  const cleaned = text.substring(firstBrace);
+  
+  // Also remove any trailing non-JSON text after the last closing brace
+  const lastBrace = cleaned.lastIndexOf('}');
+  if (lastBrace !== -1 && lastBrace < cleaned.length - 1) {
+    return cleaned.substring(0, lastBrace + 1);
+  }
+  
+  return cleaned;
+}
+
+// Retry helper with exponential backoff for Groq rate limits
+async function retryWithBackoff<T>(
+  operation: () => Promise<T>,
+  maxRetries: number = 6,
+  operationName: string = "API call",
+  controller?: ReadableStreamDefaultController<Uint8Array>,
+  encoder?: TextEncoder
+): Promise<T> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error: any) {
+      const isRateLimit = error?.status === 429 || error?.error?.error?.code === 'rate_limit_exceeded';
+      const isLastAttempt = attempt === maxRetries - 1;
+      
+      if (!isRateLimit || isLastAttempt) {
+        throw error; // Not a rate limit or no more retries
+      }
+      
+      // Calculate backoff time
+      const retryAfterHeader = error?.headers?.['retry-after'];
+      const retryAfterSeconds = retryAfterHeader ? parseFloat(retryAfterHeader) : null;
+      const exponentialBackoff = Math.pow(2, attempt); // 1, 2, 4, 8, 16, 32 seconds
+      const waitSeconds = Math.ceil(retryAfterSeconds || exponentialBackoff);
+      
+      const logMessage = `⚠️ Rate limit hit on ${operationName} (attempt ${attempt + 1}/${maxRetries}). Waiting ${waitSeconds}s before retry...\n`;
+      console.log(logMessage);
+      console.log(`   Remaining tokens: ${error?.headers?.['x-ratelimit-remaining-tokens'] || 'unknown'}`);
+      console.log(`   Reset time: ${error?.headers?.['x-ratelimit-reset-tokens'] || 'unknown'}`);
+      
+      // Notify via stream if available
+      if (controller && encoder) {
+        try {
+          controller.enqueue(encoder.encode(logMessage));
+        } catch (e) {
+          // Ignore if stream is closed
+        }
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000));
+    }
+  }
+  
+  throw new Error(`${operationName} failed after ${maxRetries} retries`);
+}
+
 async function classifyPageType(
   markdown: string,
   url: string,
@@ -308,7 +375,7 @@ async function classifyPageType(
 URL: ${url}
 
 CONTENT:
-${markdown.substring(0, 8000)}
+${markdown}
 
 Available Schema Types:
 - Article: Blog posts, news articles, editorial content
@@ -341,21 +408,29 @@ Analyze the content and return a JSON object with:
 
 Return ONLY the JSON object, no other text.`
 
-  const response = await groq.chat.completions.create({
-    messages: [
-      {
-        role: "system",
-        content: "You are an expert at analyzing web content and determining appropriate schema.org types. Always return valid JSON."
-      },
-      {
-        role: "user",
-        content: classificationPrompt
-      }
-    ],
-    model: "openai/gpt-oss-120b",
-    temperature: 0.3,
-    max_tokens: 1000,
-  })
+  // Use retry logic for classification with up to 6 retries
+  const response = await retryWithBackoff(
+    () => groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: "You are a JSON-only API. You MUST return ONLY valid, parseable JSON. No commentary, no markdown, no extra characters, no dots, no newlines before the opening brace. Start your response with { and end with }."
+        },
+        {
+          role: "user",
+          content: classificationPrompt
+        }
+      ],
+      model: "openai/gpt-oss-120b",
+      temperature: 0.3,
+      max_tokens: 65536,
+      response_format: { type: "json_object" }
+    }),
+    6,
+    "Page classification",
+    controller,
+    encoder
+  );
 
   const classificationText = response.choices[0]?.message?.content || "{}"
   console.log("Classification result:", classificationText)
@@ -457,13 +532,22 @@ ${domainData.jsonLdSchemaPostTemplate ? `\n## DOMAIN TEMPLATE REFERENCE\n${domai
 
 6. **Validation**: Ensure the JSON-LD is valid and follows schema.org specifications
 
-Return ONLY the complete JSON-LD schema code. No explanation, no wrapper text, just valid JSON-LD that can be directly inserted into a <script type="application/ld+json"> tag.`
+CRITICAL OUTPUT REQUIREMENTS:
+- Return ONLY the complete JSON-LD schema code
+- Start with { and end with }
+- NO explanatory text before or after the JSON
+- NO markdown code blocks (no \`\`\`json)
+- NO comments inside the JSON
+- NO extra dots, periods, or characters
+- Must be valid, parseable JSON that can be directly inserted into a <script type="application/ld+json"> tag
+- Test that your output starts with exactly "{" (opening brace) as the first character`
 }
 
 async function streamSchemaGeneration(
   url?: string, 
   outlineGuid?: string, 
-  taskId?: string
+  taskId?: string,
+  supabaseClient?: any
 ): Promise<ReadableStream<Uint8Array>> {
   const encoder = new TextEncoder()
   
@@ -635,52 +719,103 @@ async function streamSchemaGeneration(
           { synopsis, jsonLdSchemaPostTemplate, jsonLdSchemaGenerationPrompt }
         )
         
+        // Variable to store cleaned schema for webhook
+        let finalCleanedSchema = '';
+        
         try {
           controller.enqueue(encoder.encode("Sending request to AI...\n"))
           
-          const heartbeatInterval = setInterval(() => {
-            controller.enqueue(encoder.encode("."));
-          }, 3000);
-
-          const chatCompletion = await groq.chat.completions.create({
-            messages: [
-              {
-                role: "system",
-                content: `You are an expert SEO specialist focused on creating accurate, comprehensive JSON-LD schema markup. You specialize in ${classification.primaryType} schema and always follow schema.org specifications precisely.`
-              },
-              {
-                role: "user",
-                content: enhancedPrompt
-              }
-            ],
-            model: "openai/gpt-oss-120b",
-            temperature: 0.4,
-            max_tokens: 65536,
-            top_p: 1,
-            stream: true,
-          })
-
-          controller.enqueue(encoder.encode("Receiving and processing response from AI...\n"))
-          controller.enqueue(encoder.encode("Workflow complete. Streaming schema to user...\n"))
-          controller.enqueue(encoder.encode("</think>\n\n"))
+          // NO heartbeat interval - it interferes with JSON output
           
-          // Stream the schema content
-          let chunkCount = 0;
-          for await (const chunk of chatCompletion) {
-            if (chunk.choices[0]?.delta?.content) {
-              const content = chunk.choices[0].delta.content
-              controller.enqueue(encoder.encode(content))
+          // Wrap the streaming call with retry logic
+          await retryWithBackoff(
+            async () => {
+              const chatCompletion = await groq.chat.completions.create({
+                messages: [
+                  {
+                    role: "system",
+                    content: `You are a JSON-only API. You MUST return ONLY valid, parseable JSON-LD schema markup. No commentary, no markdown, no code blocks, no extra characters, no dots. Your response must start with exactly "{" as the first character and end with "}". You specialize in ${classification.primaryType} schema and follow schema.org specifications precisely.`
+                  },
+                  {
+                    role: "user",
+                    content: enhancedPrompt
+                  }
+                ],
+                model: "openai/gpt-oss-120b",
+                temperature: 0.4,
+                max_tokens: 65536,
+                top_p: 1,
+                stream: true,
+                response_format: { type: "json_object" }
+              });
+
+              controller.enqueue(encoder.encode("Receiving and processing response from AI...\n"));
               
-              chunkCount++;
-              if (chunkCount % 10 === 0) {
-                await new Promise(resolve => setTimeout(resolve, 5));
+              // Collect the full response first to clean it
+              let fullSchema = '';
+              let chunkCount = 0;
+              for await (const chunk of chatCompletion) {
+                if (chunk.choices[0]?.delta?.content) {
+                  fullSchema += chunk.choices[0].delta.content;
+                  chunkCount++;
+                }
               }
+              
+              console.log(`Received ${chunkCount} chunks, total length: ${fullSchema.length}`);
+              
+              // Clean the JSON output (remove leading dots, markdown, etc.)
+              const cleanedSchema = cleanJsonOutput(fullSchema);
+              finalCleanedSchema = cleanedSchema; // Store for webhook
+              
+              if (cleanedSchema !== fullSchema) {
+                console.log(`Cleaned schema: removed ${fullSchema.length - cleanedSchema.length} leading/trailing characters`);
+              }
+              
+              // Validate it's parseable JSON
+              try {
+                JSON.parse(cleanedSchema);
+                console.log("✅ Schema is valid JSON");
+              } catch (parseError) {
+                console.error("⚠️ Schema may not be valid JSON:", parseError);
+              }
+              
+              controller.enqueue(encoder.encode("Workflow complete. Streaming schema to user...\n"));
+              controller.enqueue(encoder.encode("</think>\n\n"));
+              
+              // Stream the cleaned schema
+              controller.enqueue(encoder.encode(cleanedSchema));
+              
+              console.log("Completed streaming schema");
+            },
+            6,
+            "Schema generation",
+            controller,
+            encoder
+          );
+          
+          // Send webhook if task_id is provided and supabase client is available
+          if (taskId && supabaseClient && finalCleanedSchema) {
+            try {
+              console.log('[Webhook] Sending schema_generated webhook for task:', taskId);
+              await notifySchemaGenerated(
+                supabaseClient,
+                taskId,
+                {
+                  schema: finalCleanedSchema,
+                  schema_type: classification.primaryType,
+                  validation_status: 'valid',
+                  url: postUrl,
+                  reasoning: classification.reasoning
+                }
+              );
+              console.log('[Webhook] ✅ schema_generated webhook sent successfully');
+            } catch (webhookError) {
+              console.error('[Webhook] Failed to send schema_generated webhook:', webhookError);
+              // Don't fail the function if webhook fails
             }
+          } else {
+            console.log('[Webhook] Skipping schema_generated webhook (no task_id, supabase client, or schema)');
           }
-          
-          clearInterval(heartbeatInterval);
-          
-          console.log("Completed streaming schema")
         } catch (error) {
           console.error("Error in Groq API generation:", error)
           controller.enqueue(encoder.encode(`Error generating schema: ${error}\n`))
@@ -741,7 +876,12 @@ serve(async (req) => {
 
     let postUrl = url || live_post_url
     
-    const stream = await streamSchemaGeneration(postUrl, content_plan_outline_guid, task_id)
+    // Create Supabase client for webhooks
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
+    const stream = await streamSchemaGeneration(postUrl, content_plan_outline_guid, task_id, supabase)
     
     return new Response(stream, {
       headers: {

@@ -2,6 +2,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { Groq } from 'npm:groq-sdk'
+import { notifySchemaGenerated } from '../_shared/webhook-integration.ts'
 
 serve(async (req) => {
   // Set CORS headers for all responses
@@ -503,6 +504,30 @@ serve(async (req) => {
     
     if (error) {
       throw error
+    }
+    
+    // Send webhook notification if task_id is provided
+    if (task_id) {
+      try {
+        console.log('[Webhook] Sending schema_generated webhook for task:', task_id);
+        await notifySchemaGenerated(
+          supabaseClient,
+          task_id,
+          {
+            schema: schemaContent,
+            schema_type: 'Article', // Default type for this function
+            validation_status: 'valid',
+            url: postUrl,
+            reasoning: reasoning
+          }
+        );
+        console.log('[Webhook] ✅ schema_generated webhook sent successfully');
+      } catch (webhookError) {
+        console.error('[Webhook] Failed to send schema_generated webhook:', webhookError);
+        // Don't fail the function if webhook fails
+      }
+    } else {
+      console.log('[Webhook] Skipping schema_generated webhook (no task_id provided)');
     }
     
     return new Response(

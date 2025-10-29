@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../helpers.ts';
 import { logError } from '../utils/error-handling.ts';
+import { triggerCentrWebhooks } from '../_shared/webhook-helpers-v2.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
@@ -106,6 +107,46 @@ serve(async (req) => {
         console.warn(`Warning: Could not log status history: ${historyError}`);
       }
       
+      // Send Centr webhook notification for status change
+      try {
+        console.log(`[Webhook] Sending Centr webhook for task ${task_id}, status: ${status}`);
+        
+        // Prepare full task data for Centr webhook format
+        const webhookData = {
+          task_id: task_id,
+          title: data[0]?.title || '',
+          slug: data[0]?.title ? data[0].title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-') : '',
+          status: status,
+          client_domain: data[0]?.client_domain || '',
+          content: data[0]?.content || data[0]?.post_html || '',
+          html_link: data[0]?.html_link,
+          google_doc_link: data[0]?.google_doc_link,
+          live_post_url: data[0]?.live_post_url,
+          seo_keyword: data[0]?.seo_keyword,
+          meta_description: data[0]?.meta_description,
+          completed_at: new Date().toISOString(),
+          error: null,
+          ...additional_data
+        };
+        
+        // Determine event type based on status
+        let eventType = 'content_complete';
+        const normalizedStatus = status.toLowerCase();
+        if (normalizedStatus === 'completed' || normalizedStatus === 'complete') {
+          eventType = 'content_complete';
+        } else if (normalizedStatus === 'started' || normalizedStatus === 'processing') {
+          eventType = 'content_started';
+        } else if (normalizedStatus === 'failed' || normalizedStatus === 'error') {
+          eventType = 'content_error';
+        }
+        
+        await triggerCentrWebhooks(supabase, eventType, webhookData, task_id);
+        console.log(`[Webhook] ✅ Centr webhook sent for status: ${status}`);
+      } catch (webhookError) {
+        console.error('[Webhook] Failed to send Centr webhook:', webhookError);
+        // Don't fail the function if webhook fails
+      }
+      
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -165,6 +206,46 @@ serve(async (req) => {
           });
       } catch (historyError) {
         console.warn(`Warning: Could not log status history: ${historyError}`);
+      }
+      
+      // Send Centr webhook notification for status change
+      try {
+        console.log(`[Webhook] Sending Centr webhook for task ${latestTaskId}, status: ${status}`);
+        
+        // Prepare full task data for Centr webhook format
+        const webhookData = {
+          task_id: latestTaskId,
+          title: data[0]?.title || '',
+          slug: data[0]?.title ? data[0].title.toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-') : '',
+          status: status,
+          client_domain: data[0]?.client_domain || '',
+          content: data[0]?.content || data[0]?.post_html || '',
+          html_link: data[0]?.html_link,
+          google_doc_link: data[0]?.google_doc_link,
+          live_post_url: data[0]?.live_post_url,
+          seo_keyword: data[0]?.seo_keyword,
+          meta_description: data[0]?.meta_description,
+          completed_at: new Date().toISOString(),
+          error: null,
+          ...additional_data
+        };
+        
+        // Determine event type based on status
+        let eventType = 'content_complete';
+        const normalizedStatus = status.toLowerCase();
+        if (normalizedStatus === 'completed' || normalizedStatus === 'complete') {
+          eventType = 'content_complete';
+        } else if (normalizedStatus === 'started' || normalizedStatus === 'processing') {
+          eventType = 'content_started';
+        } else if (normalizedStatus === 'failed' || normalizedStatus === 'error') {
+          eventType = 'content_error';
+        }
+        
+        await triggerCentrWebhooks(supabase, eventType, webhookData, latestTaskId);
+        console.log(`[Webhook] ✅ Centr webhook sent for status: ${status}`);
+      } catch (webhookError) {
+        console.error('[Webhook] Failed to send Centr webhook:', webhookError);
+        // Don't fail the function if webhook fails
       }
       
       return new Response(

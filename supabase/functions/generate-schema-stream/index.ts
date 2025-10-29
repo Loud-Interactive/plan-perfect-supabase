@@ -2,6 +2,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { Groq } from 'npm:groq-sdk'
+import { notifySchemaGenerated } from '../_shared/webhook-integration.ts'
 
 function extractRootDomain(url: string): string {
   try {
@@ -25,7 +26,8 @@ function extractRootDomain(url: string): string {
 async function streamSchemaGeneration(
   url?: string, 
   outlineGuid?: string, 
-  taskId?: string
+  taskId?: string,
+  supabaseClient?: any
 ): Promise<ReadableStream<Uint8Array>> {
   const encoder = new TextEncoder()
   
@@ -452,14 +454,14 @@ Return ONLY the JSON-LD schema code. No explanation, no wrapper text, just the c
           controller.enqueue(encoder.encode("</processing>\n\n"))
           
           console.log("Streaming content from Groq API")
-          // Stream the schema content directly without buffering
+          // Collect full response for webhook notification
+          let fullSchema = '';
           let chunkCount = 0;
           for await (const chunk of chatCompletion) {
             if (chunk.choices[0]?.delta?.content) {
               const content = chunk.choices[0].delta.content
-              controller.enqueue(encoder.encode(content))
+              fullSchema += content;
               
-              // Send a newline every few chunks to help with streaming recognition
               chunkCount++;
               if (chunkCount % 10 === 0) {
                 await new Promise(resolve => setTimeout(resolve, 5));
@@ -470,7 +472,32 @@ Return ONLY the JSON-LD schema code. No explanation, no wrapper text, just the c
           // Clear the heartbeat interval
           clearInterval(heartbeatInterval);
           
-          console.log("Completed streaming schema")
+          console.log(`Collected ${chunkCount} chunks, total length: ${fullSchema.length}`);
+          
+          // Stream the schema to user
+          controller.enqueue(encoder.encode(fullSchema));
+          
+          console.log("Completed streaming schema");
+          
+          // Send webhook if task_id is provided
+          if (taskId && supabaseClient) {
+            try {
+              console.log('[Webhook] Sending schema_generated webhook for task:', taskId);
+              await notifySchemaGenerated(
+                supabaseClient,
+                taskId,
+                {
+                  schema: fullSchema,
+                  schema_type: 'Article',
+                  validation_status: 'valid',
+                  url: postUrl
+                }
+              );
+              console.log('[Webhook] ✅ schema_generated webhook sent successfully');
+            } catch (webhookError) {
+              console.error('[Webhook] Failed to send schema_generated webhook:', webhookError);
+            }
+          }
         } catch (error) {
           console.error("Error in Groq API generation:", error)
           controller.enqueue(encoder.encode(`Error generating schema: ${error}\n`))
@@ -548,8 +575,13 @@ serve(async (req) => {
     // If no direct URL was provided, we'll need to fetch it from the database
     // This will happen in the streamSchemaGeneration function
     
+    // Create Supabase client for webhooks
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
     // Create the streaming response
-    const stream = await streamSchemaGeneration(postUrl, content_plan_outline_guid, task_id)
+    const stream = await streamSchemaGeneration(postUrl, content_plan_outline_guid, task_id, supabase)
     
     return new Response(stream, {
       headers: {

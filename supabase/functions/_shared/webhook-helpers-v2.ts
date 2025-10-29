@@ -1,5 +1,4 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.8";
-import * as crypto from "https://deno.land/std@0.168.0/crypto/mod.ts";
 
 export interface CentrWebhookPayload {
   guid: string;  // GUID at the top (will be task_id)
@@ -19,7 +18,7 @@ export interface CentrWebhookPayload {
     live_post_url?: string;
     progress?: number;
   };
-  signature?: string;
+  // Note: signature is sent in X-Webhook-Signature header, NOT in body
 }
 
 export interface WebhookConfig {
@@ -39,7 +38,9 @@ export async function generateWebhookSignature(
   secret: string
 ): Promise<string> {
   const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey(
+  
+  // Use the global Web Crypto API (available in Deno)
+  const key = await globalThis.crypto.subtle.importKey(
     "raw",
     encoder.encode(secret),
     { name: "HMAC", hash: "SHA-256" },
@@ -47,7 +48,7 @@ export async function generateWebhookSignature(
     ["sign"]
   );
 
-  const signature = await crypto.subtle.sign(
+  const signature = await globalThis.crypto.subtle.sign(
     "HMAC",
     key,
     encoder.encode(payload)
@@ -83,7 +84,7 @@ export async function sendCentrWebhook(
 ): Promise<{ success: boolean; error?: string; statusCode?: number }> {
   try {
     // Use task_id as the GUID
-    const eventGuid = data.task_id || guid || crypto.randomUUID();
+    const eventGuid = data.task_id || guid || globalThis.crypto.randomUUID();
 
     // Prepare Centr-formatted payload - guid at top level
     const payload: CentrWebhookPayload = {
@@ -107,11 +108,17 @@ export async function sendCentrWebhook(
 
     const payloadString = JSON.stringify(payload);
 
-    // Generate signature
+    // Generate signature from the payload (without signature in body)
     const signature = await generateWebhookSignature(payloadString, webhook.secret);
-    payload.signature = signature;
 
-    // Send webhook
+    // Debug logging
+    console.log(`[sendCentrWebhook] Sending to: ${webhook.webhook_url}`);
+    console.log(`[sendCentrWebhook] Payload length: ${payloadString.length} chars`);
+    console.log(`[sendCentrWebhook] Payload preview: ${payloadString.substring(0, 200)}...`);
+    console.log(`[sendCentrWebhook] Signature: ${signature}`);
+    console.log(`[sendCentrWebhook] Secret (first 10 chars): ${webhook.secret.substring(0, 10)}...`);
+
+    // Send webhook - signature ONLY in header, NOT in body (per Centr spec)
     const response = await fetch(webhook.webhook_url, {
       method: "POST",
       headers: {
@@ -122,10 +129,21 @@ export async function sendCentrWebhook(
         "X-Webhook-GUID": eventGuid,
         "X-Webhook-Timestamp": payload.timestamp
       },
-      body: JSON.stringify(payload) // Send with signature in body
+      body: payloadString  // Send original payload without signature in body
     });
 
+    console.log(`[sendCentrWebhook] Response status: ${response.status} ${response.statusText}`);
+
     if (!response.ok) {
+      // Try to get error body for debugging
+      let errorBody = '';
+      try {
+        errorBody = await response.text();
+        console.log(`[sendCentrWebhook] Error response body: ${errorBody}`);
+      } catch (e) {
+        console.log(`[sendCentrWebhook] Could not read error body`);
+      }
+      
       return {
         success: false,
         error: `HTTP ${response.status}: ${response.statusText}`,
@@ -150,6 +168,8 @@ export async function getWebhooksForEvent(
   event: string,
   domain?: string
 ): Promise<WebhookConfig[]> {
+  console.log(`[getWebhooksForEvent] Looking for event: ${event}, domain: ${domain}`);
+  
   let query = supabase
     .from("webhooks")
     .select(`
@@ -171,10 +191,12 @@ export async function getWebhooksForEvent(
   const { data, error } = await query;
 
   if (error) {
-    console.error("Error fetching webhooks:", error);
+    console.error("[getWebhooksForEvent] Error fetching webhooks:", error);
     return [];
   }
 
+  console.log(`[getWebhooksForEvent] Found ${data?.length || 0} webhooks for event: ${event}, domain: ${domain}`);
+  
   return data || [];
 }
 
@@ -277,10 +299,13 @@ export async function triggerCentrWebhooks(
   guid?: string
 ): Promise<void> {
   const domain = data.client_domain || data.domain;
+  console.log(`[triggerCentrWebhooks] Event: ${event}, Domain: ${domain}, Data keys:`, Object.keys(data));
+  
   const webhooks = await getWebhooksForEvent(supabase, event, domain);
 
   if (webhooks.length === 0) {
-    console.log(`No active webhooks found for event: ${event}`);
+    console.log(`No active webhooks found for event: ${event}, domain: ${domain}`);
+    console.log(`Available data:`, { client_domain: data.client_domain, domain: data.domain });
     return;
   }
 

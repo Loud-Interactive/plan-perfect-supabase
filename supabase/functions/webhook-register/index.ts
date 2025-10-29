@@ -21,10 +21,12 @@ const VALID_EVENTS = [
   "content_progress",
   "content_complete",
   "content_error",
+  "content_created",      // HTML/markdown generated and saved
   "outline_generated",
   "research_complete",
   "draft_complete",
-  "qa_complete"
+  "qa_complete",
+  "schema_generated"      // JSON-LD schema generated
 ];
 
 serve(async (req) => {

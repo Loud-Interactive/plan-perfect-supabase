@@ -75,10 +75,8 @@ serve(async (req) => {
     }
 
     const targetDomain = domain ? normalizeDomain(domain) : job.domain
-    const { prompt, rawText } = await fetchGroqSiteSummaryWithRetry(targetDomain)
-    logPromptAndResponse(job_id, targetDomain, prompt, rawText)
-
-    const pages = parseGroqPages(rawText, targetDomain)
+    const { prompt, rawText, pages } = await fetchAndParseWithRetry(targetDomain, job_id)
+    
     if (pages.length === 0) {
       throw new Error('Groq returned no pages to process')
     }
@@ -233,6 +231,69 @@ async function fetchGroqSiteSummary(domain: string): Promise<{ prompt: string; r
   return { prompt, rawText: fullText }
 }
 
+/**
+ * Fetch AND parse with retry logic - retries cover both API failures and parsing failures
+ */
+async function fetchAndParseWithRetry(
+  domain: string, 
+  jobId: string,
+  maxAttempts = 5
+): Promise<{ prompt: string; rawText: string; pages: GroqPageEntry[] }> {
+  let lastError: unknown = null
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      console.log(`[synopsis-crawler-fast] Attempt ${attempt}/${maxAttempts} for ${domain}`)
+      
+      // Fetch from Groq
+      const { prompt, rawText } = await fetchGroqSiteSummary(domain)
+      
+      // Log it
+      logPromptAndResponse(jobId, domain, prompt, rawText)
+      
+      // Validate response is not empty
+      if (!rawText || rawText.trim().length === 0) {
+        throw new Error('Groq returned empty response')
+      }
+      
+      // Try to parse
+      const pages = parseGroqPages(rawText, domain)
+      
+      // Validate we got actual pages
+      if (!pages || pages.length === 0) {
+        throw new Error('Groq response contained no valid pages')
+      }
+      
+      console.log(`[synopsis-crawler-fast] ✅ Success on attempt ${attempt}: got ${pages.length} pages`)
+      return { prompt, rawText, pages }
+      
+    } catch (error) {
+      lastError = error
+      const isLastAttempt = attempt === maxAttempts
+      const errorMsg = (error as Error).message || String(error)
+      
+      console.warn(
+        `[synopsis-crawler-fast] ❌ Attempt ${attempt}/${maxAttempts} failed for ${domain}: ${errorMsg}`
+      )
+
+      if (isLastAttempt) {
+        console.error(`[synopsis-crawler-fast] 🚨 All ${maxAttempts} attempts failed for ${domain}`)
+        throw error
+      }
+
+      // Exponential backoff: 2s, 4s, 8s, 16s (capped at 16s)
+      const backoffMs = Math.min(2000 * Math.pow(2, attempt - 1), 16000)
+      console.log(`[synopsis-crawler-fast] ⏳ Retrying in ${backoffMs}ms...`)
+      await delay(backoffMs)
+    }
+  }
+
+  throw lastError ?? new Error('Unknown error fetching and parsing Groq site summary')
+}
+
+/**
+ * @deprecated Use fetchAndParseWithRetry instead
+ */
 async function fetchGroqSiteSummaryWithRetry(domain: string, maxAttempts = 3): Promise<{ prompt: string; rawText: string }> {
   let lastError: unknown = null
 

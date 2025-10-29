@@ -147,7 +147,10 @@ export async function notifyTaskStatusChange(
 ): Promise<void> {
   let event: string;
 
-  switch (status) {
+  // Normalize status to lowercase for case-insensitive matching
+  const normalizedStatus = status.toLowerCase();
+
+  switch (normalizedStatus) {
     case 'processing':
     case 'started':
       event = 'content_started';
@@ -168,15 +171,15 @@ export async function notifyTaskStatusChange(
   const { data: task } = await supabase
     .from('tasks')
     .select('*')
-    .eq('id', taskId)
+    .eq('task_id', taskId)  // Use task_id (string) not id (UUID)
     .single();
 
   if (!task) {
-    console.error(`Task not found: ${taskId}`);
+    console.error(`Task not found for content status webhook: ${taskId}`);
     return;
   }
 
-  const domain = extractDomain(task.url, task.metadata, task.custom_fields);
+  const domain = extractDomain(task.live_post_url || task.url, task.metadata, task.custom_fields);
 
   await queueWebhookEvent(
     supabase,
@@ -185,7 +188,7 @@ export async function notifyTaskStatusChange(
       task_id: taskId,
       status,
       title: task.title,
-      url: task.url,
+      url: task.live_post_url || task.url,
       ...data
     },
     domain,
@@ -209,15 +212,15 @@ export async function notifyProgressUpdate(
   const { data: task } = await supabase
     .from('tasks')
     .select('*')
-    .eq('id', taskId)
+    .eq('task_id', taskId)  // Use task_id (string) not id (UUID)
     .single();
 
   if (!task) {
-    console.error(`Task not found: ${taskId}`);
+    console.error(`Task not found for progress webhook: ${taskId}`);
     return;
   }
 
-  const domain = extractDomain(task.url, task.metadata, task.custom_fields);
+  const domain = extractDomain(task.live_post_url || task.url, task.metadata, task.custom_fields);
 
   await queueWebhookEvent(
     supabase,
@@ -277,15 +280,15 @@ export async function notifyResearchComplete(
   const { data: task } = await supabase
     .from('tasks')
     .select('*')
-    .eq('id', taskId)
+    .eq('task_id', taskId)  // Use task_id (string) not id (UUID)
     .single();
 
   if (!task) {
-    console.error(`Task not found: ${taskId}`);
+    console.error(`Task not found for research webhook: ${taskId}`);
     return;
   }
 
-  const domain = extractDomain(task.url, task.metadata, task.custom_fields);
+  const domain = extractDomain(task.live_post_url || task.url, task.metadata, task.custom_fields);
 
   await queueWebhookEvent(
     supabase,
@@ -315,15 +318,15 @@ export async function notifyDraftComplete(
   const { data: task } = await supabase
     .from('tasks')
     .select('*')
-    .eq('id', taskId)
+    .eq('task_id', taskId)  // Use task_id (string) not id (UUID)
     .single();
 
   if (!task) {
-    console.error(`Task not found: ${taskId}`);
+    console.error(`Task not found for draft webhook: ${taskId}`);
     return;
   }
 
-  const domain = extractDomain(task.url, task.metadata, task.custom_fields);
+  const domain = extractDomain(task.live_post_url || task.url, task.metadata, task.custom_fields);
 
   await queueWebhookEvent(
     supabase,
@@ -355,15 +358,15 @@ export async function notifyQAComplete(
   const { data: task } = await supabase
     .from('tasks')
     .select('*')
-    .eq('id', taskId)
+    .eq('task_id', taskId)  // Use task_id (string) not id (UUID)
     .single();
 
   if (!task) {
-    console.error(`Task not found: ${taskId}`);
+    console.error(`Task not found for QA webhook: ${taskId}`);
     return;
   }
 
-  const domain = extractDomain(task.url, task.metadata, task.custom_fields);
+  const domain = extractDomain(task.live_post_url || task.url, task.metadata, task.custom_fields);
 
   await queueWebhookEvent(
     supabase,
@@ -372,6 +375,104 @@ export async function notifyQAComplete(
       task_id: taskId,
       qa_results: qaResults,
       final_content: finalContent,
+      completed_at: new Date().toISOString()
+    },
+    domain,
+    {
+      task_id: taskId,
+      ...task.metadata
+    }
+  );
+}
+
+/**
+ * Notify webhook about content creation (HTML/markdown generated)
+ */
+export async function notifyContentCreated(
+  supabase: any,
+  taskId: string,
+  contentData: {
+    html?: string;
+    markdown?: string;
+    word_count?: number;
+    has_schema?: boolean;
+  }
+): Promise<void> {
+  // Get task details for domain
+  const { data: task } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('task_id', taskId)
+    .single();
+
+  if (!task) {
+    console.error(`Task not found for content_created webhook: ${taskId}`);
+    return;
+  }
+
+  const domain = extractDomain(task.live_post_url, task.metadata, task.custom_fields);
+
+  await queueWebhookEvent(
+    supabase,
+    'content_created',
+    {
+      task_id: taskId,
+      title: task.title,
+      url: task.live_post_url,
+      word_count: contentData.word_count,
+      has_html: !!contentData.html,
+      has_markdown: !!contentData.markdown,
+      has_schema: contentData.has_schema || false,
+      created_at: new Date().toISOString()
+    },
+    domain,
+    {
+      task_id: taskId,
+      ...task.metadata
+    }
+  );
+}
+
+/**
+ * Notify webhook about schema generation completion
+ * Used by: generate-schema, generate-schema-stream, generate-schema-perfect
+ */
+export async function notifySchemaGenerated(
+  supabase: any,
+  taskId: string,
+  schemaData: {
+    schema?: string;
+    schema_type?: string;
+    validation_status?: string;
+    url?: string;
+    reasoning?: string;
+  }
+): Promise<void> {
+  // Get task details for domain
+  const { data: task } = await supabase
+    .from('tasks')
+    .select('*')
+    .eq('task_id', taskId)
+    .single();
+
+  if (!task) {
+    console.error(`Task not found for schema_generated webhook: ${taskId}`);
+    return;
+  }
+
+  const domain = extractDomain(task.live_post_url, task.metadata, task.custom_fields);
+
+  await queueWebhookEvent(
+    supabase,
+    'schema_generated',
+    {
+      task_id: taskId,
+      url: schemaData.url || task.live_post_url,
+      schema: schemaData.schema,
+      schema_type: schemaData.schema_type || 'Article',
+      validation_status: schemaData.validation_status || 'valid',
+      reasoning: schemaData.reasoning,
+      schema_length: schemaData.schema?.length || 0,
       completed_at: new Date().toISOString()
     },
     domain,

@@ -14,6 +14,7 @@ import { loadCompletePreferences } from '../utils/html-generation/preferences-lo
 import { generateCallouts, generateEnhancedSummary } from '../utils/html-generation/callout-generator.ts';
 import { constructHTML } from '../utils/html-generation/html-constructor.ts';
 import { generateSchema } from '../utils/html-generation/schema-generator.ts';
+import { notifyContentCreated, notifyTaskStatusChange } from '../_shared/webhook-integration.ts';
 
 // Initialize environment variables
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
@@ -682,6 +683,40 @@ serve(async (req) => {
     }
 
     console.log('[Main] ✅ Task completed successfully');
+
+    // Send webhook notifications
+    try {
+      console.log('[Webhook] Sending content_created webhook...');
+      await notifyContentCreated(
+        supabase,
+        taskId!,
+        {
+          html: html,
+          markdown: markdown,
+          word_count: markdown.length,
+          has_schema: schemaResult.success
+        }
+      );
+      console.log('[Webhook] ✅ content_created webhook sent');
+      
+      console.log('[Webhook] Sending content_complete webhook...');
+      await notifyTaskStatusChange(
+        supabase,
+        taskId!,
+        'completed',
+        {
+          html_length: html.length,
+          markdown_length: markdown.length,
+          callout_count: calloutResult.callouts.size,
+          has_schema: schemaResult.success,
+          schema_skipped: !schemaResult.success
+        }
+      );
+      console.log('[Webhook] ✅ content_complete webhook sent');
+    } catch (webhookError) {
+      console.error('[Webhook] Failed to send webhooks:', webhookError);
+      // Don't fail the function if webhooks fail
+    }
 
     // Return success response
     return new Response(

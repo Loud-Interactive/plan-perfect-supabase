@@ -335,19 +335,85 @@ async function upsertPairsBulk(domain: string, guid: string, pairs: Record<strin
       key,
       value,
       last_updated: timestamp
+      // Note: pair_id is a GENERATED column computed as domain || '_' || key
+      // PostgreSQL will compute it automatically, we don't insert it
     }))
 
     if (payload.length === 0) {
       return
     }
 
-    const { error } = await supabase
-      .from('pairs')
-      .upsert(payload, { onConflict: 'pair_id' })
+    // Deduplicate by key - keep the last occurrence of each key
+    const deduplicatedPayload = Object.values(
+      payload.reduce((acc, pair) => {
+        acc[pair.key] = pair  // Last one wins
+        return acc
+      }, {} as Record<string, typeof payload[0]>)
+    )
+
+    if (payload.length !== deduplicatedPayload.length) {
+      console.warn(`[upsertPairsBulk] Removed ${payload.length - deduplicatedPayload.length} duplicate keys`)
+    }
+
+    console.log(`[upsertPairsBulk] Attempting to upsert ${deduplicatedPayload.length} pairs for guid ${guid}`)
+
+    // Check if pairs already exist and only insert new ones
+    for (const pair of deduplicatedPayload) {
+      // Check if this pair already exists (pair_id = domain_key)
+      const { data: existing, error: checkError } = await supabase
+        .from('pairs')
+        .select('pair_id')
+        .eq('domain', pair.domain)
+        .eq('key', pair.key)
+        .maybeSingle()
+
+      if (checkError) {
+        console.error(`[upsertPairsBulk] Check pair ${pair.key} failed:`, checkError.message)
+        throw checkError
+      }
+
+      if (existing) {
+        // Update existing pair
+        const { error: updateError } = await supabase
+          .from('pairs')
+          .update({
+            value: pair.value,
+            guid: pair.guid,
+            last_updated: pair.last_updated
+          })
+          .eq('domain', pair.domain)
+          .eq('key', pair.key)
+
+        if (updateError) {
+          console.error(`[upsertPairsBulk] Update pair ${pair.key} failed:`, updateError.message)
+          throw updateError
+        }
+      } else {
+        // Insert new pair
+        const { error: insertError } = await supabase
+          .from('pairs')
+          .insert(pair)
+
+        if (insertError) {
+          console.error(`[upsertPairsBulk] Insert pair ${pair.key} failed:`, insertError.message)
+          throw insertError
+        }
+      }
+    }
+
+    const error = null  // No error if we got here
+    const data = deduplicatedPayload  // Success
 
     if (error) {
+      console.error('[upsertPairsBulk] Upsert failed, error details:', JSON.stringify(error))
+      console.error('[upsertPairsBulk] Attempted to insert:', payload.length, 'pairs')
+      console.error('[upsertPairsBulk] Sample pair:', payload[0])
       throw error
     }
+
+    console.log('[upsertPairsBulk] Upsert result:', data?.length || 0, 'rows affected')
+    
+    console.log(`[upsertPairsBulk] Successfully upserted ${payload.length} pairs for domain ${domain}, guid ${guid}`)
   } catch (error) {
     console.error('Error bulk upserting pairs:', error)
     throw error
