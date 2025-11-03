@@ -4,6 +4,7 @@ export interface CentrWebhookPayload {
   guid: string;  // GUID at the top (will be task_id)
   event: string;
   timestamp: string;
+  signature?: string;  // Optional signature at top level (per Erik's request)
   data: {
     status: string;
     title: string;
@@ -14,11 +15,12 @@ export interface CentrWebhookPayload {
     content?: string;
     seo_keyword?: string;
     meta_description?: string;
+    hero_image_url?: string;
     error?: string;
     live_post_url?: string;
     progress?: number;
   };
-  // Note: signature is sent in X-Webhook-Signature header, NOT in body
+  // Note: signature is sent in BOTH X-Webhook-Signature header AND in body
 }
 
 export interface WebhookConfig {
@@ -31,7 +33,8 @@ export interface WebhookConfig {
 
 /**
  * Generate HMAC signature for webhook payload verification
- * Format: sha256=<base64_signature>
+ * Per Centr spec: sha256=<hex_encoded_hash>
+ * Signs the full JSON request body as a compact string
  */
 export async function generateWebhookSignature(
   payload: string,
@@ -54,10 +57,11 @@ export async function generateWebhookSignature(
     encoder.encode(payload)
   );
 
-  // Convert to hex string (matching common webhook signature formats)
+  // Convert to hex string as per Centr spec
   const hashArray = Array.from(new Uint8Array(signature));
   const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
+  // Return with sha256= prefix as required by Centr
   return `sha256=${hashHex}`;
 }
 
@@ -86,8 +90,52 @@ export async function sendCentrWebhook(
     // Use task_id as the GUID
     const eventGuid = data.task_id || guid || globalThis.crypto.randomUUID();
 
+    // If there's HTML content, upload it to Supabase Storage and use the URL instead
+    let contentUrl = data.html_link;
+    
+    if (data.content && data.content.length > 1000) {
+      console.log(`[sendCentrWebhook] Uploading HTML to storage (${data.content.length} bytes)...`);
+      
+      try {
+        const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+        const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+        
+        if (supabaseUrl && supabaseServiceKey) {
+          const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
+          
+          // Upload HTML to storage: /blogs/centr.com/{guid}.html
+          const fileName = `${eventGuid}.html`;
+          const filePath = `centr.com/${fileName}`;
+          
+          const { data: uploadData, error: uploadError } = await supabaseClient
+            .storage
+            .from('blogs')
+            .upload(filePath, data.content, {
+              contentType: 'text/html',
+              upsert: true
+            });
+          
+          if (uploadError) {
+            console.error(`[sendCentrWebhook] Storage upload error:`, uploadError);
+          } else {
+            // Generate public URL
+            const { data: { publicUrl } } = supabaseClient
+              .storage
+              .from('blogs')
+              .getPublicUrl(filePath);
+            
+            contentUrl = publicUrl;
+            console.log(`[sendCentrWebhook] HTML uploaded to: ${publicUrl}`);
+          }
+        }
+      } catch (storageError) {
+        console.error(`[sendCentrWebhook] Storage error:`, storageError);
+        // Continue with original content if storage fails
+      }
+    }
+
     // Prepare Centr-formatted payload - guid at top level
-    const payload: CentrWebhookPayload = {
+    const payloadWithoutSignature = {
       guid: eventGuid,  // GUID at the top
       event,
       timestamp: new Date().toISOString(),
@@ -96,29 +144,39 @@ export async function sendCentrWebhook(
         title: data.title || '',
         slug: data.slug || generateSlug(data.title || ''),
         client_domain: data.client_domain || data.domain || '',
-        html_link: data.html_link,
+        html_link: contentUrl,  // Use storage URL instead of inline HTML
         google_doc_link: data.google_doc_link,
-        content: data.content,
+        content: contentUrl ? undefined : data.content,  // Only include content if no URL
         seo_keyword: data.seo_keyword || data.primary_keyword,
         meta_description: data.meta_description,
+        hero_image_url: data.hero_image_url,
         error: data.error,
         live_post_url: data.live_post_url
       }
     };
 
-    const payloadString = JSON.stringify(payload);
+    // Generate signature from payload WITHOUT signature field
+    const payloadStringForSigning = JSON.stringify(payloadWithoutSignature);
+    const signature = await generateWebhookSignature(payloadStringForSigning, webhook.secret);
 
-    // Generate signature from the payload (without signature in body)
-    const signature = await generateWebhookSignature(payloadString, webhook.secret);
+    // Now add signature to the payload at top level (per Erik's request)
+    const payloadWithSignature = {
+      ...payloadWithoutSignature,
+      signature: signature  // Add signature at top level
+    };
+
+    const finalPayloadString = JSON.stringify(payloadWithSignature);
 
     // Debug logging
     console.log(`[sendCentrWebhook] Sending to: ${webhook.webhook_url}`);
-    console.log(`[sendCentrWebhook] Payload length: ${payloadString.length} chars`);
-    console.log(`[sendCentrWebhook] Payload preview: ${payloadString.substring(0, 200)}...`);
+    console.log(`[sendCentrWebhook] Payload length: ${finalPayloadString.length} chars`);
+    console.log(`[sendCentrWebhook] Payload preview: ${finalPayloadString.substring(0, 200)}...`);
     console.log(`[sendCentrWebhook] Signature: ${signature}`);
     console.log(`[sendCentrWebhook] Secret (first 10 chars): ${webhook.secret.substring(0, 10)}...`);
+    console.log(`[sendCentrWebhook] NOTE: Signature included BOTH in header AND in payload body`);
 
-    // Send webhook - signature ONLY in header, NOT in body (per Centr spec)
+    // Send webhook - signature in BOTH header AND body (per Erik's request)
+    // Note: API key is already in the webhook URL as a query parameter (e.g., ?code=sk_xxx)
     const response = await fetch(webhook.webhook_url, {
       method: "POST",
       headers: {
@@ -127,9 +185,9 @@ export async function sendCentrWebhook(
         "X-Webhook-Event": event,
         "X-Webhook-ID": webhook.id,
         "X-Webhook-GUID": eventGuid,
-        "X-Webhook-Timestamp": payload.timestamp
+        "X-Webhook-Timestamp": payloadWithoutSignature.timestamp
       },
-      body: payloadString  // Send original payload without signature in body
+      body: finalPayloadString  // Send payload WITH signature in body
     });
 
     console.log(`[sendCentrWebhook] Response status: ${response.status} ${response.statusText}`);

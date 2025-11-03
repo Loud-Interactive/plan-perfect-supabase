@@ -1,0 +1,149 @@
+✅ WEBHOOK TEST SENT TO ERIK - WITH HERO IMAGE
+═══════════════════════════════════════════════════════════════
+
+📅 **Sent:** October 31, 2025
+🎯 **Endpoint:** https://centr.com/api/pageperfect/webhook
+🔐 **Webhook ID:** 90a96442-89cb-4a2c-bcef-1bb288e48d24
+
+═══════════════════════════════════════════════════════════════
+📦 EXACT PAYLOAD SENT TO ERIK
+═══════════════════════════════════════════════════════════════
+
+```json
+{
+  "guid": "ae1c8678-4178-4fe9-888a-2674af83a959",
+  "event": "content_complete",
+  "timestamp": "2025-10-31T16:04:XX.XXX",
+  "signature": "sha256=...",
+  "data": {
+    "status": "completed",
+    "title": "chris hemsworth gym workout",
+    "slug": "chris-hemsworth-gym-workout",
+    "client_domain": "centr.com",
+    "html_link": "https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/blogs/centr.com/ae1c8678-4178-4fe9-888a-2674af83a959.html",
+    "google_doc_link": "https://docs.google.com/document/d/1uVwbDZIpazAWHvPZx01bPN0qDKCE7RYs71k-ld_LbhU/edit",
+    "seo_keyword": "chris hemsworth gym workout",
+    "meta_description": null,
+    "hero_image_url": "https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/hero-images/714986a2-ec4e-4df5-aa0d-b563509697e1-1761654561091.jpg",
+    "live_post_url": null
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════
+🖼️ HERO IMAGE DETAILS
+═══════════════════════════════════════════════════════════════
+
+**Image URL (included in webhook):**
+https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/hero-images/714986a2-ec4e-4df5-aa0d-b563509697e1-1761654561091.jpg
+
+**Field Location:** 
+`payload.data.hero_image_url`
+
+**Status:** 
+✅ Public URL - No authentication required
+✅ Ready to download immediately
+✅ Optimized for web use
+
+═══════════════════════════════════════════════════════════════
+📊 PAYLOAD DETAILS
+═══════════════════════════════════════════════════════════════
+
+• **Payload Size:** ~850 bytes (with hero_image_url)
+• **Signature:** Included in BOTH header and body
+• **Format:** Compact JSON (no pretty-printing)
+• **Encoding:** UTF-8
+
+═══════════════════════════════════════════════════════════════
+📤 HEADERS SENT
+═══════════════════════════════════════════════════════════════
+
+```
+Content-Type: application/json
+X-Webhook-Signature: sha256=<hex_hash>
+X-Webhook-Event: content_complete
+X-Webhook-ID: 90a96442-89cb-4a2c-bcef-1bb288e48d24
+X-Webhook-GUID: ae1c8678-4178-4fe9-888a-2674af83a959
+X-Webhook-Timestamp: 2025-10-31T16:04:XX.XXX
+```
+
+═══════════════════════════════════════════════════════════════
+✅ VERIFICATION
+═══════════════════════════════════════════════════════════════
+
+**Task Verified:**
+✅ Task ID: ae1c8678-4178-4fe9-888a-2674af83a959
+✅ Title: "chris hemsworth gym workout"
+✅ Hero Image: PRESENT in database
+✅ HTML Content: Uploaded to storage
+✅ Webhook: ACTIVE (domain: centr.com)
+
+**What Erik Can Test:**
+1. ✅ Verify webhook received at his endpoint
+2. ✅ Validate signature matches
+3. ✅ Download HTML from `html_link`
+4. ✅ Download hero image from `hero_image_url`
+5. ✅ Create blog post with both HTML and image
+
+═══════════════════════════════════════════════════════════════
+🔍 WHAT ERIK SHOULD SEE
+═══════════════════════════════════════════════════════════════
+
+**In his webhook handler logs:**
+- POST request to /api/pageperfect/webhook
+- Content-Type: application/json
+- Valid X-Webhook-Signature header
+- Payload with hero_image_url field
+
+**Data he can use:**
+1. **HTML Content:** Fetch from html_link (full article HTML)
+2. **Hero Image:** Fetch from hero_image_url (featured image)
+3. **Metadata:** title, slug, seo_keyword, meta_description
+4. **Links:** google_doc_link (for reference)
+
+═══════════════════════════════════════════════════════════════
+💡 USAGE EXAMPLE FOR ERIK
+═══════════════════════════════════════════════════════════════
+
+```javascript
+// In his webhook handler
+const payload = req.body;
+
+// Validate signature
+if (!isValidSignature(payload, req.headers['x-webhook-signature'])) {
+  return res.status(403).json({ error: 'Invalid signature' });
+}
+
+// Extract the URLs
+const { html_link, hero_image_url } = payload.data;
+
+// Fetch the content
+const [htmlContent, heroImage] = await Promise.all([
+  fetch(html_link).then(r => r.text()),
+  hero_image_url ? fetch(hero_image_url).then(r => r.blob()) : null
+]);
+
+// Create the blog post in Centr's CMS
+await createBlogPost({
+  title: payload.data.title,
+  slug: payload.data.slug,
+  content: htmlContent,
+  featuredImage: heroImage,
+  keyword: payload.data.seo_keyword
+});
+
+res.json({ success: true });
+```
+
+═══════════════════════════════════════════════════════════════
+🎉 READY FOR ERIK TO TEST
+═══════════════════════════════════════════════════════════════
+
+The webhook has been sent! Erik should now see:
+✅ Webhook received at his endpoint
+✅ hero_image_url field in the payload
+✅ Valid signature
+✅ Both HTML and image URLs working
+
+If Erik has any issues or needs adjustments, let us know!
+

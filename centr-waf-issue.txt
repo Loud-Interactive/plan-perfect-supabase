@@ -1,0 +1,70 @@
+═══════════════════════════════════════════════════════════════
+CENTR WEBHOOK - WAF BLOCKING ISSUE DISCOVERED
+═══════════════════════════════════════════════════════════════
+
+Hi Erik,
+
+We've identified the root cause of the 403 errors!
+
+ISSUE: WAF (Web Application Firewall) Blocking Large Payloads
+──────────────────────────────────────────────────────────────
+
+Our signature implementation is CORRECT. Here's what we tested:
+
+Test 1: Small Payload (~500 bytes)
+Result: ✅ HTTP 200 OK
+Response: {"success":true,"message":"Webhook processed successfully"}
+
+Test 2: Full Real Payload (36.48 KB with HTML content)
+Result: ❌ HTTP 403 Forbidden
+Response: "The request is blocked." (HTML error page from WAF)
+Error Reference: 20251030T193707Z-r18f88fcf89dwl7whC1BL1ug8000000005n000000000qt1c
+
+CONCLUSION:
+──────────────────────────────────────────────────────────────
+The signature validation is working correctly. The issue is that
+your WAF is blocking requests with large payloads (our article
+HTML content is ~35 KB).
+
+This is NOT a signature validation error - it's a firewall rule
+blocking the request before it reaches your webhook handler.
+
+ACTION NEEDED:
+──────────────────────────────────────────────────────────────
+Please contact your infrastructure/security team to:
+
+1. Whitelist the LOUD webhook endpoint path:
+   /webhooks/v1/loud-articles
+
+2. Increase the WAF payload size limit for this endpoint to at least:
+   50 KB (to accommodate article HTML content)
+
+3. If there are specific WAF rules blocking HTML content in JSON payloads,
+   please add an exception for this webhook endpoint.
+
+4. Use this error reference to investigate the WAF block:
+   20251030T193707Z-r18f88fcf89dwl7whC1BL1ug8000000005n000000000qt1c
+
+EVIDENCE:
+──────────────────────────────────────────────────────────────
+- Small test payloads: Accepted (200 OK)
+- Large real payloads: Blocked with "The request is blocked"
+- Signature: Identical format in both cases (sha256=<hex>)
+- Both sent with signature in header AND body as requested
+
+The WAF error page returned:
+<!DOCTYPE html...>
+<h2>The request is blocked.</h2>
+<span>20251030T193707Z-r18f88fcf89dwl7whC1BL1ug8000000005n000000000qt1c</span>
+
+NEXT STEPS:
+──────────────────────────────────────────────────────────────
+Once the WAF rules are updated, our webhooks will work immediately.
+No changes needed on our side - the integration is ready.
+
+Let me know once the WAF rules are updated and I'll test again!
+
+Thanks,
+Martin
+martin@loud.us
+

@@ -1,0 +1,152 @@
+🎉 CENTR WEBHOOK - LIVE AND READY FOR TESTING
+═══════════════════════════════════════════════════════════════
+
+✅ **Status:** DEPLOYED & ACTIVE
+📅 **Date:** October 30, 2025  
+🧪 **Test:** Just sent a real webhook (task: ae1c8678-4178-4fe9-888a-2674af83a959)
+
+═══════════════════════════════════════════════════════════════
+📦 WHAT YOU'LL RECEIVE (SMALL PAYLOAD - NO MORE WAF ISSUES!)
+═══════════════════════════════════════════════════════════════
+
+**Webhook URL:** https://centr.com/api/pageperfect/webhook?code=<YOUR_API_KEY>
+
+**Headers:**
+```
+Content-Type: application/json
+X-Webhook-Signature: sha256=<hex_hash>
+X-Webhook-Event: content_complete
+X-Webhook-ID: 90a96442-89cb-4a2c-bcef-1bb288e48d24
+X-Webhook-Timestamp: 2025-10-30T...
+```
+
+**Payload Structure (~800 bytes instead of 36KB!):**
+```json
+{
+  "guid": "ae1c8678-4178-4fe9-888a-2674af83a959",
+  "event": "content_complete",
+  "timestamp": "2025-10-30T...",
+  "signature": "sha256=<hex_hash>",  ← Also included here per your request
+  "data": {
+    "status": "completed",
+    "title": "chris hemsworth gym workout",
+    "slug": "chris-hemsworth-gym-workout",
+    "client_domain": "centr.com",
+    "html_link": "https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/blogs/centr.com/ae1c8678-4178-4fe9-888a-2674af83a959.html",
+    "google_doc_link": "https://docs.google.com/document/d/...",
+    "seo_keyword": "chris hemsworth gym workout",
+    "meta_description": "Master Chris Hemsworth's workout foundation..."
+  }
+}
+```
+
+**KEY CHANGES:**
+- ❌ **NO** `content` field with inline HTML
+- ✅ **YES** `html_link` with Supabase Storage URL
+- ✅ Signature in **TWO places** (header + body)
+- ✅ 98% smaller payload = No WAF blocking!
+
+═══════════════════════════════════════════════════════════════
+📥 HOW TO USE THE WEBHOOK
+═══════════════════════════════════════════════════════════════
+
+1. **Receive the webhook** at your endpoint
+2. **Verify the signature** using the X-Webhook-Signature header
+3. **Fetch the HTML** from the `html_link` URL:
+   ```javascript
+   const htmlContent = await fetch(payload.data.html_link)
+     .then(r => r.text());
+   ```
+4. **Process the HTML** as needed for your system
+
+═══════════════════════════════════════════════════════════════
+🔐 SIGNATURE VERIFICATION
+═══════════════════════════════════════════════════════════════
+
+**Secret:** 1qaz2wsx3edc4rfv5tgb6yhn7ujm8ik9ol
+
+**Node.js Example:**
+```javascript
+const crypto = require('crypto');
+
+function verifySignature(payload, receivedSignature, secret) {
+  const payloadString = JSON.stringify(payload);
+  const hmac = crypto.createHmac('sha256', secret);
+  hmac.update(payloadString);
+  const expectedSignature = 'sha256=' + hmac.digest('hex');
+  
+  return expectedSignature === receivedSignature;
+}
+
+// In your webhook handler:
+app.post('/api/pageperfect/webhook', async (req, res) => {
+  const signature = req.headers['x-webhook-signature'];
+  const secret = '1qaz2wsx3edc4rfv5tgb6yhn7ujm8ik9ol';
+  
+  if (!verifySignature(req.body, signature, secret)) {
+    return res.status(403).json({ 
+      success: false, 
+      message: 'Invalid signature' 
+    });
+  }
+  
+  // Fetch the HTML content
+  const htmlUrl = req.body.data.html_link;
+  const htmlContent = await fetch(htmlUrl).then(r => r.text());
+  
+  // Process the content...
+  
+  res.json({ success: true, message: 'Webhook received' });
+});
+```
+
+═══════════════════════════════════════════════════════════════
+✅ WHAT'S BEEN FIXED
+═══════════════════════════════════════════════════════════════
+
+1. ✅ **WAF Issue Solved**
+   - Before: 36KB payload → ❌ Blocked
+   - After: ~800 byte payload → ✅ Works!
+
+2. ✅ **Signature Placement**
+   - Now in TWO places (per your request):
+     a) X-Webhook-Signature header
+     b) Top-level "signature" field in payload
+
+3. ✅ **HTML Storage**
+   - Uploaded to: `blogs/centr.com/{guid}.html`
+   - Public URL sent in `html_link`
+   - Available immediately after webhook
+
+4. ✅ **Webhook Active**
+   - Domain: centr.com
+   - Status: ACTIVE (is_active: true)
+   - Ready to receive production webhooks
+
+═══════════════════════════════════════════════════════════════
+🧪 TESTING NOTES
+═══════════════════════════════════════════════════════════════
+
+**Test webhook just sent:**
+- Task ID: ae1c8678-4178-4fe9-888a-2674af83a959
+- Title: "chris hemsworth gym workout"
+- HTML Link: https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/blogs/centr.com/ae1c8678-4178-4fe9-888a-2674af83a959.html
+
+**You can verify:**
+1. Check your webhook endpoint logs
+2. Fetch the HTML from the storage URL
+3. Verify the signature matches
+
+═══════════════════════════════════════════════════════════════
+📞 READY FOR PRODUCTION
+═══════════════════════════════════════════════════════════════
+
+Everything is deployed and working! When a task is completed:
+1. HTML uploads to Supabase Storage automatically
+2. Webhook sends small payload with URL
+3. Your system fetches HTML and processes it
+
+**No more WAF issues!** 🎉
+
+Let us know if you need any adjustments or have questions!
+

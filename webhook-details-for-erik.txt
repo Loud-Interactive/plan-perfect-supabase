@@ -1,0 +1,90 @@
+═══════════════════════════════════════════════════════════════
+CENTR WEBHOOK - COMPLETE PAYLOAD CAPTURE
+═══════════════════════════════════════════════════════════════
+
+Task ID: ae1c8678-4178-4fe9-888a-2674af83a959
+Title: chris hemsworth gym workout
+Generated: 2025-10-30T19:32:51.781Z
+
+───────────────────────────────────────────────────────────────
+WEBHOOK URL:
+───────────────────────────────────────────────────────────────
+POST https://uat.centr.com/webhooks/v1/loud-articles?code=sk_0wjgbMYDFkXscTeSze4rPvk96nliBIy1PnykQruamuQ=
+
+───────────────────────────────────────────────────────────────
+HEADERS SENT:
+───────────────────────────────────────────────────────────────
+Content-Type: application/json
+X-Webhook-Signature: sha256=0909b459a9a7b815a37dfc1434a21c9caebe77cb1cd6165b3c664f3ecdecad26
+X-Webhook-Event: content_complete
+X-Webhook-ID: 90a96442-89cb-4a2c-bcef-1bb288e48d24
+X-Webhook-GUID: ae1c8678-4178-4fe9-888a-2674af83a959
+X-Webhook-Timestamp: 2025-10-30T19:32:51.780Z
+
+───────────────────────────────────────────────────────────────
+SIGNATURE GENERATION PROCESS:
+───────────────────────────────────────────────────────────────
+Step 1: Create payload WITHOUT signature field
+Step 2: Compute HMAC-SHA256 using secret: MDAdVT7rXYThlWUz6h/kwbKYsotGcFOfyPqBI30ojvUA1qHb6dF1dx5oddaSnib1
+Step 3: Format as: sha256=<hex>
+Step 4: Add signature to payload at top level
+Step 5: Send payload WITH signature in BOTH header AND body
+
+───────────────────────────────────────────────────────────────
+PAYLOAD STATISTICS:
+───────────────────────────────────────────────────────────────
+Total Size: 36.48 KB
+Content Size: 34.89 KB
+Characters: 37,359
+
+───────────────────────────────────────────────────────────────
+SIGNATURE:
+───────────────────────────────────────────────────────────────
+sha256=0909b459a9a7b815a37dfc1434a21c9caebe77cb1cd6165b3c664f3ecdecad26
+
+═══════════════════════════════════════════════════════════════
+COMPLETE PAYLOAD JSON (EXACTLY AS SENT):
+═══════════════════════════════════════════════════════════════
+(See: webhook-payload-full.json)
+
+PAYLOAD STRUCTURE:
+{
+  "guid": "ae1c8678-4178-4fe9-888a-2674af83a959",
+  "event": "content_complete",
+  "timestamp": "2025-10-30T19:32:51.780Z",
+  "signature": "sha256=0909b459a9a7b815a37dfc1434a21c9caebe77cb1cd6165b3c664f3ecdecad26",  ← SIGNATURE AT TOP LEVEL
+  "data": {
+    "status": "Completed",
+    "title": "chris hemsworth gym workout",
+    "slug": "chris-hemsworth-gym-workout",
+    "client_domain": "centr.com",
+    "html_link": "https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/blogs/centr.com/714986a2-ec4e-4df5-aa0d-b563509697e1.html",
+    "google_doc_link": "https://docs.google.com/document/d/1uVwbDZIpazAWHvPZx01bPN0qDKCE7RYs71k-ld_LbhU/edit",
+    "content": "<!DOCTYPE html>...[35 KB of HTML]...",
+    "seo_keyword": "chris hemsworth gym workout",
+    "meta_description": "",
+    "live_post_url": ""
+  }
+}
+
+═══════════════════════════════════════════════════════════════
+FILES GENERATED:
+═══════════════════════════════════════════════════════════════
+1. webhook-payload-full.json     - Complete payload (36.48 KB)
+2. webhook-payload-readable.json - Formatted for readability
+3. webhook-details-for-erik.txt  - This file with all details
+4. webhook-html-only.html        - Just the HTML content
+5. webhook-signature-test.txt    - Test command for Erik
+
+═══════════════════════════════════════════════════════════════
+TO SEND TO ERIK:
+═══════════════════════════════════════════════════════════════
+Attach these 5 files to your email. They contain:
+- The exact payload bytes we send
+- All headers we include
+- The HTML content
+- Instructions to verify the signature
+
+═══════════════════════════════════════════════════════════════
+END OF CAPTURE
+═══════════════════════════════════════════════════════════════

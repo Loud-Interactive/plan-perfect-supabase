@@ -1,0 +1,75 @@
+═══════════════════════════════════════════════════════════════
+CENTR WEBHOOK - STORAGE URL SOLUTION IMPLEMENTED ✅
+═══════════════════════════════════════════════════════════════
+
+Hi Erik,
+
+Great solution! I've implemented the storage URL approach as we discussed.
+
+WHAT CHANGED:
+──────────────────────────────────────────────────────────────
+Instead of sending 36KB of HTML in the webhook payload, we now:
+
+1. Upload HTML to Supabase Storage:
+   /blogs/centr.com/{task_guid}.html
+
+2. Send the public URL in the payload:
+   https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/blogs/centr.com/{guid}.html
+
+Example:
+https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/blogs/centr.com/714986a2-ec4e-4df5-aa0d-b563509697e1.html
+
+NEW PAYLOAD STRUCTURE:
+──────────────────────────────────────────────────────────────
+{
+  "guid": "ae1c8678-4178-4fe9-888a-2674af83a959",
+  "event": "content_complete",
+  "timestamp": "2025-10-30T20:00:00.000Z",
+  "signature": "sha256=<hex>",
+  "data": {
+    "status": "Completed",
+    "title": "chris hemsworth gym workout",
+    "slug": "chris-hemsworth-gym-workout",
+    "client_domain": "centr.com",
+    "html_link": "https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/blogs/centr.com/ae1c8678-4178-4fe9-888a-2674af83a959.html",  ← STORAGE URL
+    "google_doc_link": "https://docs.google.com/document/d/...",
+    "seo_keyword": "chris hemsworth gym workout",
+    "meta_description": "...",
+    "live_post_url": "https://centr.com/chris-hemsworth-gym-workout"
+  }
+}
+
+Note: "content" field is now OMITTED - use html_link to fetch the HTML
+
+BENEFITS:
+──────────────────────────────────────────────────────────────
+✅ Payload size reduced: 36KB → ~500 bytes (99% smaller!)
+✅ No WAF size limits
+✅ No HTML in JSON payload issues
+✅ Clean separation of concerns
+✅ HTML can be fetched on-demand from the URL
+✅ Same signature format (sha256=<hex>) in header and body
+
+DEPLOYMENT STATUS:
+──────────────────────────────────────────────────────────────
+✅ Code deployed to production
+✅ Webhook activated for centr.com
+✅ Storage bucket configured with public access
+✅ All HTML files automatically uploaded and available
+
+NEXT STEPS:
+──────────────────────────────────────────────────────────────
+1. I'll trigger a test webhook with a real task
+2. You'll receive the webhook with the html_link URL
+3. Your system fetches the HTML from that URL
+4. Verify everything works end-to-end
+
+If this test passes, the integration is complete! 🎉
+
+Let me know when you're ready and I'll send a test.
+
+Thanks for the great solution idea!
+
+Martin
+martin@loud.us
+

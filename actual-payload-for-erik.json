@@ -1,0 +1,18 @@
+{
+  "guid": "ae1c8678-4178-4fe9-888a-2674af83a959",
+  "event": "content_complete",
+  "timestamp": "2025-10-30T18:02:42.347Z",
+  "data": {
+    "status": "Completed",
+    "title": "chris hemsworth gym workout",
+    "slug": "chris-hemsworth-gym-workout",
+    "client_domain": "centr.com",
+    "html_link": null,
+    "google_doc_link": null,
+    "content": "<!DOCTYPE html>\r\n<html lang=\"en\">\r\n\r\n<head>\r\n  <meta charset=\"UTF-8\" />\r\n  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />\r\n  <title>chris hemsworth gym workout | Centr</title>\r\n  <meta name=\"description\" content=\"Master Chris Hemsworth's workout foundation with dynamic warm-ups, core circuits, mobility drills, and compound power moves for serious strength gains.\">\r\n  <link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\r\n  <link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\r\n  <link rel=\"stylesheet\" href=\"accessibility-styles.css\">\r\n  <link href=\"https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/cp-blog-css/centr.com.css\" rel=\"stylesheet\" />\r\n</head>\r\n\r\n<body>\r\n  <a href=\"#main-content\" class=\"skip-link\" style=\"position: absolute; top: -40px; left: 6px; background: #000; color: #fff; padding: 8px; text-decoration: none; z-index: 1000; border-radius: 4px; font-weight: bold;\">Skip to main content</a>\r\n  <script type=\"application/ld+json\">{...SCHEMA DATA...}</script>\r\n  ...[FULL HTML CONTENT APPROXIMATELY 50KB]...\r\n</body>\r\n\r\n</html>",
+    "seo_keyword": "chris hemsworth gym workout",
+    "meta_description": "Master Chris Hemsworth's workout foundation with dynamic warm-ups, core circuits, mobility drills, and compound power moves for serious strength gains.",
+    "live_post_url": "https://centr.com/chris-hemsworth-gym-workout"
+  }
+}
+

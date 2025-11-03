@@ -1,0 +1,19 @@
+# Test Command for Erik to Verify Signature
+# ============================================
+
+# 1. Compute signature from the payload file
+cat webhook-payload-full.json | openssl dgst -sha256 -hmac "MDAdVT7rXYThlWUz6h/kwbKYsotGcFOfyPqBI30ojvUA1qHb6dF1dx5oddaSnib1"
+
+# Expected output:
+# 0909b459a9a7b815a37dfc1434a21c9caebe77cb1cd6165b3c664f3ecdecad26
+
+# 2. Verify it matches the signature in the payload
+grep "signature" webhook-payload-full.json
+
+# Should show:
+# "signature":"sha256=0909b459a9a7b815a37dfc1434a21c9caebe77cb1cd6165b3c664f3ecdecad26"
+
+# ============================================
+# The signature is calculated from the payload
+# BEFORE the signature field is added.
+# ============================================

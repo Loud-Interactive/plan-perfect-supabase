@@ -1,0 +1,32 @@
+CENTR WEBHOOK - ACTUAL PAYLOAD TEST DATA
+========================================
+
+Task ID: ae1c8678-4178-4fe9-888a-2674af83a959
+Title: chris hemsworth gym workout
+Generated: 2025-10-30T18:14:17.177Z
+
+PAYLOAD SIZE:
+- Total: 36.40 KB
+- Content only: 34.89 KB
+
+SIGNATURE:
+sha256=65339df3b01576b3d009b6ca44e82355d6e352f1e084159895870142c3500af2
+
+SECRET USED:
+MDAdVT7rXYThlWUz6h/kwbKYsotGcFOfyPqBI30ojvUA1qHb6dF1dx5oddaSnib1
+
+FILES GENERATED:
+1. actual-payload-complete.json - Formatted (readable)
+2. actual-payload-compact.json - Compact (exactly as sent)
+3. signature-info.txt - This file
+
+TO TEST ON CENTR SIDE:
+1. Read actual-payload-compact.json
+2. Compute HMAC-SHA256 with the secret above
+3. Compare with the signature above
+4. They should match exactly
+
+If they don't match, there's either:
+- A different secret being used
+- A different payload format expected
+- Additional normalization/escaping happening

@@ -1,0 +1,40 @@
+CENTR WEBHOOK - STORAGE URL PAYLOAD
+═══════════════════════════════════════════════════════════════
+
+WEBHOOK ENDPOINT:
+POST https://uat.centr.com/webhooks/v1/loud-articles?code=sk_0wjgbMYDFkXscTeSze4rPvk96nliBIy1PnykQruamuQ=
+
+HEADERS:
+Content-Type: application/json
+X-Webhook-Signature: sha256=5f44c1d1a5b994a4bc557182de1a8f3fe64c29810f4f3c7c1623bcf35c8f0bd6
+X-Webhook-Event: content_complete
+X-Webhook-ID: 90a96442-89cb-4a2c-bcef-1bb288e48d24
+X-Webhook-GUID: ae1c8678-4178-4fe9-888a-2674af83a959
+X-Webhook-Timestamp: 2025-10-30T20:22:14.936Z
+
+PAYLOAD SIZE:
+- New: 856 bytes (~0.84 KB)
+- Old: 37,359 bytes (36.48 KB with HTML)
+- Reduction: 97.7%
+
+KEY CHANGE:
+Instead of including 35KB of HTML in the "content" field, we now:
+- Upload HTML to: /blogs/centr.com/ae1c8678-4178-4fe9-888a-2674af83a959.html
+- Send URL in: data.html_link
+- Omit: data.content field
+
+HTML LOCATION:
+https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/blogs/centr.com/ae1c8678-4178-4fe9-888a-2674af83a959.html
+
+To fetch the HTML:
+curl -s "https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/blogs/centr.com/ae1c8678-4178-4fe9-888a-2674af83a959.html"
+
+SIGNATURE DETAILS:
+- Algorithm: HMAC-SHA256
+- Secret: MDAdVT7rXYThlWUz6h/kwbKYsotGcFOfyPqBI30ojvUA1qHb6dF1dx5oddaSnib1
+- Format: sha256=<hex>
+- Location: BOTH X-Webhook-Signature header AND payload.signature field
+
+COMPLETE PAYLOAD:
+See: centr-payload-with-storage-url.json
+See: centr-payload-compact.json (exactly as sent)

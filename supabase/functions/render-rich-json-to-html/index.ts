@@ -77,10 +77,10 @@ function createId(text: string): string {
 
 /**
  * Generate Table of Contents HTML
+ * Note: Template already provides <div id="toc"> wrapper, so we only return inner content
  */
 function generateTOC(article: RichArticleJson): string {
-  let toc = `<div id="toc">
-  <b>Table of Contents</b>
+  let toc = `<b>Table of Contents</b>
   <ul>
     <li><a href="#summary">Summary</a></li>\n`
 
@@ -112,8 +112,7 @@ function generateTOC(article: RichArticleJson): string {
 
   toc += `    <li><a href="#key-takeaways">Key Takeaways</a></li>
     <li><a href="#references">References</a></li>
-  </ul>
-</div>`
+  </ul>`
 
   return toc
 }
@@ -122,12 +121,10 @@ function generateTOC(article: RichArticleJson): string {
  * Generate Summary HTML
  */
 function generateSummary(summary: Summary): string {
-  return `<div id="summary">
-  <b>Summary</b>
+  return `<b>Summary</b>
   <p>
     ${summary.content}
-  </p>
-</div>`
+  </p>`
 }
 
 /**

@@ -217,6 +217,31 @@ function parseReferences(markdown: string): Reference[] {
 }
 
 /**
+ * Cleans content by removing markdown headings and converting links to HTML
+ */
+function cleanContent(content: string): string {
+  let cleaned = content
+
+  // Remove any markdown headings (###, ####, etc.) that slipped through
+  cleaned = cleaned.replace(/^#{3,6}\s+/gm, '')
+  cleaned = cleaned.replace(/\s+#{3,6}\s+/g, ' ')
+
+  // Convert markdown links [text](url) to <a href="url">text</a>
+  cleaned = cleaned.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+
+  // Convert bare URLs in square brackets [url] to <a href="url">url</a>
+  cleaned = cleaned.replace(/\[([^\]]+)\]/g, (match, url) => {
+    // Only convert if it looks like a URL
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
+    }
+    return match
+  })
+
+  return cleaned.trim()
+}
+
+/**
  * Parses markdown content into rich JSON structure
  */
 function parseMarkdownToRichJson(markdown: string): RichArticleJson {
@@ -257,8 +282,25 @@ function parseMarkdownToRichJson(markdown: string): RichArticleJson {
         sections.push(currentSection)
       }
 
+      // Extract section heading (everything after ##)
+      let sectionHeading = line.substring(3).trim()
+
+      // Check if section heading is suspiciously long (likely has content stuck to it)
+      // Typical section headings are < 100 chars. If longer, try to split it.
+      if (sectionHeading.length > 100) {
+        // Look for where a lowercase letter is directly followed by a capital letter or ###
+        // This indicates where heading ends and content/subsection begins
+        const splitMatch = sectionHeading.match(/^(.+?[a-z])((?:###|[A-Z]).*)$/)
+        if (splitMatch) {
+          sectionHeading = splitMatch[1].trim()
+          const remainingContent = splitMatch[2].trim()
+          // Push back the remaining content as a new line to be processed
+          lines.splice(i + 1, 0, remainingContent)
+        }
+      }
+
       currentSection = {
-        heading: line.substring(3).trim(),
+        heading: sectionHeading,
         subsections: [],
         content_type: 'section'
       }
@@ -270,12 +312,29 @@ function parseMarkdownToRichJson(markdown: string): RichArticleJson {
     if (line.startsWith('### ')) {
       // Save previous subsection
       if (currentSubsection && contentBuffer.length > 0) {
-        currentSubsection.content = contentBuffer.join(' ').trim()
+        currentSubsection.content = cleanContent(contentBuffer.join(' '))
         contentBuffer = []
       }
 
+      // Extract heading (everything after ###)
+      let extractedHeading = line.substring(4).trim()
+
+      // Check if heading is suspiciously long (likely has content stuck to it)
+      // Typical headings are < 100 chars. If longer, try to split it.
+      if (extractedHeading.length > 100) {
+        // Look for where a lowercase letter is directly followed by a capital letter (no space)
+        // This indicates where heading ends and content begins, e.g., "MetricsContent"
+        const splitMatch = extractedHeading.match(/^(.+?[a-z])([A-Z].*)$/)
+        if (splitMatch) {
+          extractedHeading = splitMatch[1].trim()
+          const remainingContent = splitMatch[2].trim()
+          // Add the remaining content to buffer so it gets processed
+          contentBuffer.push(remainingContent)
+        }
+      }
+
       currentSubsection = {
-        heading: line.substring(4).trim(),
+        heading: extractedHeading,
         content: '',
         content_type: 'paragraph'
       }
@@ -294,7 +353,7 @@ function parseMarkdownToRichJson(markdown: string): RichArticleJson {
 
   // Save last subsection
   if (currentSubsection && contentBuffer.length > 0) {
-    currentSubsection.content = contentBuffer.join(' ').trim()
+    currentSubsection.content = cleanContent(contentBuffer.join(' '))
   }
 
   // Save last section

@@ -1,0 +1,190 @@
+✅ WEBHOOK UPDATE - HERO IMAGE URL ADDED
+═══════════════════════════════════════════════════════════════
+
+📅 **Updated:** October 31, 2025
+🚀 **Status:** DEPLOYED & LIVE
+
+═══════════════════════════════════════════════════════════════
+🆕 WHAT'S NEW
+═══════════════════════════════════════════════════════════════
+
+**New Field Added:** `hero_image_url`
+
+The webhook payload now includes the hero/featured image URL from the 
+tasks table, as requested by the Centr team.
+
+═══════════════════════════════════════════════════════════════
+📦 UPDATED PAYLOAD STRUCTURE
+═══════════════════════════════════════════════════════════════
+
+```json
+{
+  "guid": "ae1c8678-4178-4fe9-888a-2674af83a959",
+  "event": "content_complete",
+  "timestamp": "2025-10-31T15:56:32.495Z",
+  "signature": "sha256=...",
+  "data": {
+    "status": "completed",
+    "title": "chris hemsworth gym workout",
+    "slug": "chris-hemsworth-gym-workout",
+    "client_domain": "centr.com",
+    "html_link": "https://.../blogs/centr.com/{guid}.html",
+    "google_doc_link": "https://docs.google.com/document/d/...",
+    "seo_keyword": "chris hemsworth gym workout",
+    "meta_description": "...",
+    "hero_image_url": "https://.../hero-images/714986a2-ec4e-4df5-aa0d-b563509697e1.jpg", ← NEW
+    "live_post_url": "https://centr.com/..."
+  }
+}
+```
+
+═══════════════════════════════════════════════════════════════
+🔍 FIELD DETAILS
+═══════════════════════════════════════════════════════════════
+
+**Field Name:** `hero_image_url`
+**Type:** String (nullable)
+**Location:** `payload.data.hero_image_url`
+**Source:** `tasks.hero_image_url` column in database
+
+**Example Value:**
+https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/hero-images/714986a2-ec4e-4df5-aa0d-b563509697e1-1761654561091.jpg
+
+**Notes:**
+- This is a direct URL to the hero/featured image
+- Image is stored in Supabase Storage (`hero-images` bucket)
+- Can be `null` if no hero image is set for the task
+- Always publicly accessible (no authentication required)
+
+═══════════════════════════════════════════════════════════════
+📊 EXAMPLE PAYLOAD (REAL DATA)
+═══════════════════════════════════════════════════════════════
+
+Task ID: ae1c8678-4178-4fe9-888a-2674af83a959
+Title: "chris hemsworth gym workout"
+
+Full Payload (816 bytes):
+{
+  "guid": "ae1c8678-4178-4fe9-888a-2674af83a959",
+  "event": "content_complete",
+  "timestamp": "2025-10-31T15:56:32.495Z",
+  "data": {
+    "status": "completed",
+    "title": "chris hemsworth gym workout",
+    "slug": "chris-hemsworth-gym-workout",
+    "client_domain": "centr.com",
+    "html_link": "https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/blogs/centr.com/ae1c8678-4178-4fe9-888a-2674af83a959.html",
+    "google_doc_link": "https://docs.google.com/document/d/1uVwbDZIpazAWHvPZx01bPN0qDKCE7RYs71k-ld_LbhU/edit",
+    "seo_keyword": "chris hemsworth gym workout",
+    "meta_description": null,
+    "hero_image_url": "https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/hero-images/714986a2-ec4e-4df5-aa0d-b563509697e1-1761654561091.jpg",
+    "live_post_url": null
+  },
+  "signature": "sha256=33c0b3c1c7e308791af225d5a1771a22c8a14736940ddc2a7d016ef68a01f32a"
+}
+
+═══════════════════════════════════════════════════════════════
+💻 USAGE IN YOUR WEBHOOK HANDLER
+═══════════════════════════════════════════════════════════════
+
+**JavaScript/Node.js Example:**
+
+```javascript
+app.post('/api/pageperfect/webhook', async (req, res) => {
+  const payload = req.body;
+  
+  // Verify signature first
+  if (!verifySignature(payload, req.headers['x-webhook-signature'], secret)) {
+    return res.status(403).json({ success: false, message: 'Invalid signature' });
+  }
+  
+  // Extract the data
+  const {
+    html_link,
+    hero_image_url,  // ← NEW: Hero image URL
+    title,
+    slug,
+    seo_keyword
+  } = payload.data;
+  
+  // Fetch the HTML content
+  const htmlContent = await fetch(html_link).then(r => r.text());
+  
+  // Download the hero image if needed
+  if (hero_image_url) {
+    const heroImage = await fetch(hero_image_url).then(r => r.blob());
+    // Process or save the hero image
+  }
+  
+  // Create your blog post with the content and hero image
+  await createBlogPost({
+    title,
+    slug,
+    content: htmlContent,
+    heroImage: hero_image_url,
+    keyword: seo_keyword
+  });
+  
+  res.json({ success: true, message: 'Webhook processed' });
+});
+```
+
+═══════════════════════════════════════════════════════════════
+✅ DEPLOYMENT CHECKLIST
+═══════════════════════════════════════════════════════════════
+
+- ✅ TypeScript interface updated (`CentrWebhookPayload`)
+- ✅ Webhook helper function updated (`sendCentrWebhook`)
+- ✅ Edge function updated (`update-task-status`)
+- ✅ Edge function deployed (script size: 103.8kB)
+- ✅ Tested with real task data
+- ✅ Verified in payload output
+
+═══════════════════════════════════════════════════════════════
+🧪 TESTING
+═══════════════════════════════════════════════════════════════
+
+**Test Command:**
+```bash
+curl -X POST "https://jsypctdhynsdqrfifvdh.supabase.co/functions/v1/update-task-status" \
+  -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "task_id": "ae1c8678-4178-4fe9-888a-2674af83a959",
+    "status": "completed"
+  }'
+```
+
+**Expected Result:**
+- Webhook sent to: https://centr.com/api/pageperfect/webhook
+- Payload includes `hero_image_url` field
+- Signature valid
+- HTTP 200 response from Centr endpoint
+
+═══════════════════════════════════════════════════════════════
+📝 NOTES FOR ERIK
+═══════════════════════════════════════════════════════════════
+
+1. **Field is Optional**: The `hero_image_url` can be `null` if no hero 
+   image is set for the task. Your code should handle both cases.
+
+2. **Direct URL**: The URL points directly to the image in Supabase Storage.
+   You can fetch it immediately without authentication.
+
+3. **Image Format**: Images are typically JPEG or PNG, optimized for web use.
+
+4. **Signature Still Valid**: The signature is recalculated with the new field
+   included, so your existing signature verification will continue to work.
+
+5. **Backward Compatible**: Existing webhooks that are already in flight won't
+   have this field, so make sure your code gracefully handles its absence.
+
+═══════════════════════════════════════════════════════════════
+🎉 READY FOR PRODUCTION
+═══════════════════════════════════════════════════════════════
+
+The webhook system is now sending `hero_image_url` with every content_complete
+event. You can start using this field immediately in your Centr integration.
+
+If you have any questions or need adjustments, let us know!
+

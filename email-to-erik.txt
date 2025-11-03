@@ -1,0 +1,85 @@
+Subject: LOUD Webhook Integration - Signature Validation Issue (HTTP 403)
+
+Hi Erik,
+
+We've completed the webhook integration per the LOUD API v2 spec you provided, but we're hitting a signature validation issue that's blocking testing.
+
+**Current Status:**
+- ✅ Webhook firing automatically on task completion
+- ✅ Payload reaching your endpoint
+- ✅ API key authentication passing
+- ❌ Signature validation failing (HTTP 403: Invalid webhook signature)
+
+**What We've Implemented:**
+- Endpoint: https://uat.centr.com/webhooks/v1/loud-articles?code=sk_0wjgbMYDFkXscTeSze4rPvk96nliBIy1PnykQruamuQ=
+- Signature: HMAC-SHA256 with format `sha256=<hex>` (per spec)
+- Secret: MDAdVT7rXYThlWUz6h/kwbKYsotGcFOfyPqBI30ojvUA1qHb6dF1dx5oddaSnib1
+- Payload: Compact JSON as specified
+
+**Real Test Case - Actual Payload Sent:**
+
+Task ID: ae1c8678-4178-4fe9-888a-2674af83a959
+Article: "chris hemsworth gym workout"
+
+Full JSON payload (see attached debug report for complete payload with full HTML content):
+```json
+{
+  "guid": "ae1c8678-4178-4fe9-888a-2674af83a959",
+  "event": "content_complete",
+  "timestamp": "2025-10-30T18:02:42.347Z",
+  "data": {
+    "status": "Completed",
+    "title": "chris hemsworth gym workout",
+    "slug": "chris-hemsworth-gym-workout",
+    "client_domain": "centr.com",
+    "html_link": null,
+    "google_doc_link": null,
+    "content": "<!DOCTYPE html>...[full HTML article ~50KB]...",
+    "seo_keyword": "chris hemsworth gym workout",
+    "meta_description": "Master Chris Hemsworth's workout foundation with dynamic warm-ups, core circuits, mobility drills, and compound power moves for serious strength gains.",
+    "live_post_url": "https://centr.com/chris-hemsworth-gym-workout"
+  }
+}
+```
+
+**Signature Generated:**
+The exact signature we're sending in the `X-Webhook-Signature` header for the above payload is calculated using HMAC-SHA256 with your provided secret.
+
+Can you calculate the signature on your end and compare? This will help identify if there's a discrepancy in how we're generating it vs. how you're validating it.
+
+**Questions:**
+1. Can you verify the webhook secret is correct for our integration?
+2. Can you test the signature above on your end to confirm it matches?
+3. Is there any additional validation beyond the signature that might be failing?
+4. Is the webhook properly configured for domain "centr.com" on your side?
+
+I've prepared several files to help debug this:
+
+**Attachments:**
+1. `centr-webhook-debug-report.md` - Full technical documentation
+2. `actual-payload-compact.json` - The exact payload bytes we're sending (36.4 KB)
+3. `signature-info.txt` - The signature we calculated and instructions to verify
+
+**To Test on Your End:**
+```bash
+# Read the compact payload and compute HMAC-SHA256
+cat actual-payload-compact.json | openssl dgst -sha256 -hmac "MDAdVT7rXYThlWUz6h/kwbKYsotGcFOfyPqBI30ojvUA1qHb6dF1dx5oddaSnib1"
+
+# Should produce: 65339df3b01576b3d009b6ca44e82355d6e352f1e084159895870142c3500af2
+```
+
+If this signature matches on your end, then the issue is likely with the secret or an additional validation step not in the spec. If it doesn't match, we can compare our signature generation methods.
+
+Can we schedule a quick call to resolve this? We're ready to start sending live content as soon as the signature validation is working.
+
+Thanks,
+Martin
+martin@loud.us
+(617) 997-8282
+
+---
+Attachments:
+- centr-webhook-debug-report.md
+- actual-payload-compact.json (36.4 KB - real payload)
+- signature-info.txt (test instructions)
+

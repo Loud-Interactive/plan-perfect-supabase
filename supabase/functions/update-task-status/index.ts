@@ -124,6 +124,7 @@ serve(async (req) => {
           live_post_url: data[0]?.live_post_url,
           seo_keyword: data[0]?.seo_keyword,
           meta_description: data[0]?.meta_description,
+          hero_image_url: data[0]?.hero_image_url,
           completed_at: new Date().toISOString(),
           error: null,
           ...additional_data
@@ -225,6 +226,7 @@ serve(async (req) => {
           live_post_url: data[0]?.live_post_url,
           seo_keyword: data[0]?.seo_keyword,
           meta_description: data[0]?.meta_description,
+          hero_image_url: data[0]?.hero_image_url,
           completed_at: new Date().toISOString(),
           error: null,
           ...additional_data

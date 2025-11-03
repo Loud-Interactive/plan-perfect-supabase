@@ -1,0 +1,17 @@
+{
+  "guid": "ae1c8678-4178-4fe9-888a-2674af83a959",
+  "event": "content_complete",
+  "timestamp": "2025-10-30T20:22:14.936Z",
+  "data": {
+    "status": "Completed",
+    "title": "chris hemsworth gym workout",
+    "slug": "chris-hemsworth-gym-workout",
+    "client_domain": "centr.com",
+    "html_link": "https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/blogs/centr.com/ae1c8678-4178-4fe9-888a-2674af83a959.html",
+    "google_doc_link": "https://docs.google.com/document/d/1uVwbDZIpazAWHvPZx01bPN0qDKCE7RYs71k-ld_LbhU/edit",
+    "seo_keyword": "chris hemsworth gym workout",
+    "meta_description": "Master Chris Hemsworth's workout foundation with dynamic warm-ups, core circuits, mobility drills, and compound power moves for serious strength gains.",
+    "live_post_url": "https://centr.com/chris-hemsworth-gym-workout"
+  },
+  "signature": "sha256=5f44c1d1a5b994a4bc557182de1a8f3fe64c29810f4f3c7c1623bcf35c8f0bd6"
+}
