@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { callGroqWithLogging } from '../utils/groq-logging.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -52,78 +53,192 @@ interface RichArticleJson {
 }
 
 /**
- * Extracts key points from the content
- * Looks for important sentences, statements, or actionable items
+ * Generates key points from the content using Groq Kimi K2
  */
-function extractKeyPoints(sections: Section[]): string[] {
-  const keyPoints: string[] = []
-  const maxPoints = 7
+async function generateKeyPoints(
+  sections: Section[],
+  title: string,
+  groqApiKey: string,
+  domain?: string
+): Promise<string[]> {
+  // Combine all section content for context (limit to reasonable size)
+  const contentText = sections
+    .slice(0, 10) // Use first 10 sections max
+    .map(section => {
+      const sectionContent = section.subsections
+        .slice(0, 3) // Use first 3 subsections per section
+        .map(sub => sub.content)
+        .join(' ')
+      return `## ${section.heading}\n${sectionContent}`
+    })
+    .join('\n\n')
+    .substring(0, 8000) // Limit to 8000 chars for API
 
-  // Get the first few sentences from each main section's first subsection
-  for (const section of sections.slice(0, Math.ceil(maxPoints / 2))) {
-    if (section.subsections.length > 0) {
-      const content = section.subsections[0].content
-      // Find sentences that look like actionable items or key facts
-      const sentences = content.match(/[^.!?]+[.!?]+/g) || []
+  const prompt = `Analyze this article and extract the most important key points.
 
-      for (const sentence of sentences.slice(0, 2)) {
-        const trimmed = sentence.trim()
-        // Prefer sentences with numbers, specific instructions, or important keywords
-        if (trimmed.length > 50 && trimmed.length < 200 &&
-            (trimmed.match(/\d+/) ||
-             trimmed.toLowerCase().includes('important') ||
-             trimmed.toLowerCase().includes('should') ||
-             trimmed.toLowerCase().includes('must') ||
-             trimmed.toLowerCase().includes('key'))) {
-          keyPoints.push(trimmed)
-          if (keyPoints.length >= maxPoints) break
-        }
+Article Title: ${title}
+
+Article Content:
+${contentText}
+
+Requirements:
+- Extract 5-7 key points that capture the most important information
+- Each key point should be a complete, concise sentence (50-150 characters)
+- Focus on actionable insights, important facts, or critical takeaways
+- Make each point distinct and valuable
+- Avoid generic statements
+- Return ONLY a JSON array of strings, like: ["point 1", "point 2", "point 3"]
+
+Example format:
+["Key point one sentence", "Key point two sentence", "Key point three sentence"]
+
+Return the JSON array only, no other text.`;
+
+  try {
+    const result = await callGroqWithLogging(
+      'generate-key-points',
+      prompt,
+      groqApiKey,
+      domain,
+      {
+        modelName: 'moonshotai/kimi-k2-instruct-0905',
+        temperature: 0.7,
+        maxTokens: 800
       }
-      if (keyPoints.length >= maxPoints) break
-    }
-  }
+    )
 
-  // If we didn't get enough key points, add more general sentences
-  if (keyPoints.length < 5) {
-    for (const section of sections) {
-      for (const subsection of section.subsections) {
-        const sentences = subsection.content.match(/[^.!?]+[.!?]+/g) || []
-        for (const sentence of sentences) {
-          const trimmed = sentence.trim()
-          if (trimmed.length > 60 && trimmed.length < 180) {
-            keyPoints.push(trimmed)
-            if (keyPoints.length >= 5) break
-          }
-        }
-        if (keyPoints.length >= 5) break
+    const responseText = result.response.trim()
+
+    // Try to parse as JSON array
+    try {
+      // Remove any markdown code blocks if present
+      const cleaned = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+      const keyPoints = JSON.parse(cleaned) as string[]
+
+      if (Array.isArray(keyPoints) && keyPoints.length > 0) {
+        // Validate and clean key points
+        const validPoints = keyPoints
+          .filter((point: any) => typeof point === 'string' && point.length > 20 && point.length < 200)
+          .slice(0, 7) // Limit to 7 points max
+        
+        console.log(`[generateKeyPoints] Generated ${validPoints.length} key points using AI`)
+        return validPoints
       }
-      if (keyPoints.length >= 5) break
-    }
-  }
+    } catch (parseError) {
+      console.warn(`[generateKeyPoints] Failed to parse JSON, trying to extract from text:`, parseError)
+      
+      // Fallback: try to extract list items from text
+      const lines = responseText.split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 20 && line.length < 200)
+        .filter(line => line.match(/^[-*•]\s+/) || line.match(/^\d+\.\s+/))
+        .map(line => line.replace(/^[-*•]\s+/, '').replace(/^\d+\.\s+/, ''))
+        .slice(0, 7)
 
-  return keyPoints.slice(0, maxPoints)
+      if (lines.length > 0) {
+        console.log(`[generateKeyPoints] Extracted ${lines.length} key points from text fallback`)
+        return lines
+      }
+    }
+
+    // Final fallback: return empty array
+    console.warn('[generateKeyPoints] Could not extract key points, returning empty array')
+    return []
+  } catch (error) {
+    console.error('[generateKeyPoints] Error generating key points:', error)
+    return []
+  }
 }
 
 /**
- * Generates a summary from the first section's content
+ * Generates a summary using Groq Kimi K2
  */
-function generateSummary(sections: Section[]): Summary {
-  let summaryContent = ''
+async function generateSummary(
+  sections: Section[],
+  title: string,
+  groqApiKey: string,
+  domain?: string
+): Promise<Summary> {
+  // Combine content from first few sections for context
+  const contentText = sections
+    .slice(0, 5) // Use first 5 sections
+    .map(section => {
+      const sectionContent = section.subsections
+        .slice(0, 2) // Use first 2 subsections per section
+        .map(sub => sub.content)
+        .join(' ')
+      return `## ${section.heading}\n${sectionContent}`
+    })
+    .join('\n\n')
+    .substring(0, 6000) // Limit to 6000 chars for API
 
-  // Use the first section's content as summary base
-  if (sections.length > 0 && sections[0].subsections.length > 0) {
-    const firstSubsections = sections[0].subsections.slice(0, 2)
-    summaryContent = firstSubsections
-      .map(sub => sub.content)
-      .join(' ')
-      .substring(0, 400) + '...'
-  }
+  const prompt = `Write a comprehensive summary paragraph for this article.
 
-  const keyPoints = extractKeyPoints(sections)
+Article Title: ${title}
 
-  return {
-    content: summaryContent,
-    key_points: keyPoints
+Article Content:
+${contentText}
+
+Requirements:
+- Write a full paragraph (4-6 sentences, 200-400 words)
+- Capture the essence and main value proposition of the article
+- Be engaging and informative
+- Highlight what readers will learn and why it matters
+- Use active voice and flow naturally
+- Make it comprehensive yet concise
+- Focus on the key topics and insights covered
+
+Return ONLY the summary paragraph, nothing else. Do not include a title or any other text.`;
+
+  try {
+    const result = await callGroqWithLogging(
+      'generate-summary',
+      prompt,
+      groqApiKey,
+      domain,
+      {
+        modelName: 'moonshotai/kimi-k2-instruct-0905',
+        temperature: 0.7,
+        maxTokens: 500
+      }
+    )
+
+    const summaryContent = result.response.trim()
+
+    if (summaryContent && summaryContent.length > 50) {
+      // Generate key points in parallel
+      const keyPoints = await generateKeyPoints(sections, title, groqApiKey, domain)
+
+      console.log(`[generateSummary] Generated summary (${summaryContent.length} chars) and ${keyPoints.length} key points using AI`)
+
+      return {
+        content: summaryContent,
+        key_points: keyPoints
+      }
+    }
+
+    // Fallback if summary is too short
+    throw new Error('Generated summary too short')
+  } catch (error) {
+    console.error('[generateSummary] Error generating summary:', error)
+    
+    // Fallback: use first section content
+    let summaryContent = ''
+    if (sections.length > 0 && sections[0].subsections.length > 0) {
+      const firstSubsections = sections[0].subsections.slice(0, 2)
+      summaryContent = firstSubsections
+        .map(sub => sub.content)
+        .join(' ')
+        .substring(0, 400) + '...'
+    }
+
+    // Fallback key points
+    const keyPoints = await generateKeyPoints(sections, title, groqApiKey, domain).catch(() => [])
+
+    return {
+      content: summaryContent || `This comprehensive guide explores ${title}, covering key aspects and providing valuable insights.`,
+      key_points: keyPoints
+    }
   }
 }
 
@@ -244,7 +359,11 @@ function cleanContent(content: string): string {
 /**
  * Parses markdown content into rich JSON structure
  */
-function parseMarkdownToRichJson(markdown: string): RichArticleJson {
+async function parseMarkdownToRichJson(
+  markdown: string,
+  groqApiKey: string,
+  domain?: string
+): Promise<RichArticleJson> {
   const lines = markdown.split('\n')
   const sections: Section[] = []
   let title = ''
@@ -365,8 +484,8 @@ function parseMarkdownToRichJson(markdown: string): RichArticleJson {
   const wordCount = countWords(sections)
   const sectionCount = sections.length
 
-  // Generate summary and callouts
-  const summary = generateSummary(sections)
+  // Generate summary and callouts using AI
+  const summary = await generateSummary(sections, title, groqApiKey, domain)
   const callouts = generateCallouts(sections)
 
   // Parse references
@@ -405,7 +524,14 @@ serve(async (req) => {
 
     const { task_id, content_plan_outline_guid, markdown } = await req.json()
 
+    // Get Groq API key
+    const groqApiKey = Deno.env.get('GROQ_API_KEY') || ''
+    if (!groqApiKey) {
+      console.warn('GROQ_API_KEY not set, AI-generated summaries will use fallback')
+    }
+
     let markdownContent: string
+    let domain: string | undefined
 
     // If markdown is provided directly, use it
     if (markdown) {
@@ -424,10 +550,10 @@ serve(async (req) => {
         )
       }
 
-      // Fetch the unedited_content from tasks table
+      // Fetch the unedited_content and client_domain from tasks table
       let query = supabaseClient
         .from('tasks')
-        .select('unedited_content')
+        .select('unedited_content, client_domain')
 
       if (task_id) {
         query = query.eq('task_id', task_id)
@@ -465,10 +591,11 @@ serve(async (req) => {
       }
 
       markdownContent = taskData.unedited_content
+      domain = taskData.client_domain
     }
 
-    // Parse the markdown to rich JSON
-    const richJson = parseMarkdownToRichJson(markdownContent)
+    // Parse the markdown to rich JSON using AI for summary and key points
+    const richJson = await parseMarkdownToRichJson(markdownContent, groqApiKey, domain)
 
     // Save to tasks table if task_id was provided
     if (task_id) {
