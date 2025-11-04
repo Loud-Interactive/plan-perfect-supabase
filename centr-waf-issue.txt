@@ -3,6 +3,7 @@ CENTR WEBHOOK - WAF BLOCKING ISSUE DISCOVERED
 ═══════════════════════════════════════════════════════════════
 
 Hi Erik,
+https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/blogs/centr.com/714986a2-ec4e-4df5-aa0d-b563509697e1.html
 
 We've identified the root cause of the 403 errors!
 
