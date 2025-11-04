@@ -5,6 +5,35 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
 };
+
+/**
+ * Helper function to update task status
+ */
+async function updateTaskStatus(
+  supabaseClient: any,
+  taskId: string | null,
+  outlineGuid: string | null,
+  status: string
+): Promise<void> {
+  if (!taskId && !outlineGuid) return;
+  
+  try {
+    if (taskId) {
+      await supabaseClient
+        .from('tasks')
+        .update({ status })
+        .eq('task_id', taskId);
+    } else if (outlineGuid) {
+      await supabaseClient
+        .from('tasks')
+        .update({ status })
+        .eq('content_plan_outline_guid', outlineGuid);
+    }
+    console.log(`[Status] Updated to: ${status}`);
+  } catch (error) {
+    console.warn(`[Status] Failed to update status to ${status}:`, error);
+  }
+}
 /**
  * Generates key points from the content using Groq Kimi K2
  */ async function generateKeyPoints(sections, title, groqApiKey, domain) {
@@ -227,7 +256,14 @@ Return ONLY the summary paragraph, nothing else. Do not include a title or any o
 }
 /**
  * Parses markdown content into rich JSON structure
- */ async function parseMarkdownToRichJson(markdown, groqApiKey, domain) {
+ */ async function parseMarkdownToRichJson(
+  markdown: string,
+  groqApiKey: string,
+  domain: string | undefined,
+  supabaseClient: any,
+  taskId: string | null,
+  outlineGuid: string | null
+) {
   const lines = markdown.split('\n');
   const sections = [];
   let title = '';
@@ -329,6 +365,10 @@ Return ONLY the summary paragraph, nothing else. Do not include a title or any o
   // Generate metadata
   const wordCount = countWords(sections);
   const sectionCount = sections.length;
+  
+  // Update status: generating summary with AI
+  await updateTaskStatus(supabaseClient, taskId, outlineGuid, 'generating_summary');
+  
   // Generate summary and callouts using AI
   const summary = await generateSummary(sections, title, groqApiKey, domain);
   const callouts = generateCallouts(sections);
@@ -361,6 +401,10 @@ serve(async (req)=>{
       }
     });
     const { task_id, content_plan_outline_guid, markdown } = await req.json();
+    
+    // Update status: starting conversion
+    await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'converting_markdown_to_json');
+    
     // Get Groq API key
     const groqApiKey = Deno.env.get('GROQ_API_KEY') || '';
     if (!groqApiKey) {
@@ -372,6 +416,8 @@ serve(async (req)=>{
     if (markdown) {
       markdownContent = markdown;
     } else {
+      // Update status: fetching markdown
+      await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'fetching_markdown');
       // Validate that at least one identifier is provided
       if (!task_id && !content_plan_outline_guid) {
         return new Response(JSON.stringify({
@@ -420,8 +466,16 @@ serve(async (req)=>{
       markdownContent = taskData.unedited_content;
       domain = taskData.client_domain;
     }
+    
+    // Update status: parsing markdown
+    await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'parsing_markdown');
+    
     // Parse the markdown to rich JSON using AI for summary and key points
-    const richJson = await parseMarkdownToRichJson(markdownContent, groqApiKey, domain);
+    const richJson = await parseMarkdownToRichJson(markdownContent, groqApiKey, domain, supabaseClient, task_id, content_plan_outline_guid);
+    
+    // Update status: saving JSON
+    await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'saving_json');
+    
     // Save to tasks table if task_id was provided
     if (task_id) {
       const { error: updateError } = await supabaseClient.from('tasks').update({
@@ -443,6 +497,10 @@ serve(async (req)=>{
         console.log(`Saved post_json to tasks table for outline_guid: ${content_plan_outline_guid}`);
       }
     }
+    
+    // Update status: conversion complete
+    await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'json_conversion_complete');
+    
     return new Response(JSON.stringify(richJson, null, 2), {
       headers: {
         ...corsHeaders,

@@ -4,6 +4,35 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
 };
+
+/**
+ * Helper function to update task status
+ */
+async function updateTaskStatus(
+  supabaseClient: any,
+  taskId: string | null,
+  outlineGuid: string | null,
+  status: string
+): Promise<void> {
+  if (!taskId && !outlineGuid) return;
+  
+  try {
+    if (taskId) {
+      await supabaseClient
+        .from('tasks')
+        .update({ status })
+        .eq('task_id', taskId);
+    } else if (outlineGuid) {
+      await supabaseClient
+        .from('tasks')
+        .update({ status })
+        .eq('content_plan_outline_guid', outlineGuid);
+    }
+    console.log(`[Status] Updated to: ${status}`);
+  } catch (error) {
+    console.warn(`[Status] Failed to update status to ${status}:`, error);
+  }
+}
 /**
  * Create URL-friendly ID from text
  */ function createId(text) {
@@ -285,6 +314,10 @@ serve(async (req)=>{
       }
     });
     const { task_id, content_plan_outline_guid, rich_json } = await req.json();
+    
+    // Update status: starting HTML conversion
+    await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'converting_json_to_html');
+    
     let articleJson;
     let clientDomain = null;
     let heroImageUrl = null;
@@ -322,6 +355,10 @@ serve(async (req)=>{
           console.log(`Found hero_image_url: ${heroImageUrl}`);
         }
       }
+      
+      // Update status: fetching JSON
+      await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'fetching_json');
+      
       // Call the markdown-to-rich-json function to get the JSON
       const markdownToJsonUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/markdown-to-rich-json`;
       const markdownResponse = await fetch(markdownToJsonUrl, {
@@ -350,6 +387,10 @@ serve(async (req)=>{
       }
       articleJson = await markdownResponse.json();
     }
+    
+    // Update status: fetching pairs data
+    await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'fetching_pairs_data');
+    
     // Fetch pairs data from API if we have a client_domain
     let pairsData = null;
     if (clientDomain) {
@@ -374,6 +415,10 @@ serve(async (req)=>{
       // Continue without pairs data
       }
     }
+    
+    // Update status: fetching template
+    await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'fetching_template');
+    
     // Fetch the default HTML template (we always need this as base structure)
     console.log('Fetching default template from Supabase Storage');
     const templateUrl = 'https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/cp-downloads/mrb-template.html';
@@ -417,31 +462,117 @@ serve(async (req)=>{
       console.log('Using default template');
       template = defaultTemplate;
     }
+    
+    // Update status: rendering HTML
+    await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'rendering_html');
+    
     // Render the article
     try {
       const renderedHTML = renderToHTML(articleJson, template, clientDomain || '', pairsData, customStyles, heroImageUrl);
+      
+      // Upload HTML to Supabase Storage and get public URL
+      let htmlLink: string | null = null;
+      let guidToUse: string | null = null;
+      
+      if (task_id) {
+        guidToUse = task_id;
+      } else if (content_plan_outline_guid && !rich_json) {
+        // Get task_id from content_plan_outline_guid if we don't have task_id
+        const { data: taskData } = await supabaseClient
+          .from('tasks')
+          .select('task_id')
+          .eq('content_plan_outline_guid', content_plan_outline_guid)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+        if (taskData?.task_id) {
+          guidToUse = taskData.task_id;
+        }
+      }
+      
+      // Upload to storage if we have a guid and domain
+      if (guidToUse && clientDomain) {
+        // Update status: uploading to storage
+        await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'uploading_html_to_storage');
+        
+        try {
+          const filePath = `blogs/${clientDomain}/${guidToUse}.html`;
+          console.log(`Uploading HTML to storage: ${filePath}`);
+          
+          const { error: uploadError } = await supabaseClient
+            .storage
+            .from('blogs')
+            .upload(filePath, renderedHTML, {
+              contentType: 'text/html',
+              upsert: true // Overwrite if exists
+            });
+          
+          if (uploadError) {
+            console.error(`Error uploading HTML to storage:`, uploadError);
+          } else {
+            // Get public URL
+            const { data: { publicUrl } } = supabaseClient
+              .storage
+              .from('blogs')
+              .getPublicUrl(filePath);
+            
+            htmlLink = publicUrl;
+            console.log(`HTML uploaded successfully. Public URL: ${publicUrl}`);
+          }
+        } catch (storageError) {
+          console.error(`Storage upload error:`, storageError);
+          // Continue without storage URL
+        }
+      }
+      
+      // Prepare update data
+      const updateData: Record<string, any> = {
+        post_html: renderedHTML,
+        content: renderedHTML // Update content field with HTML
+      };
+      
+      // Add html_link if we have it
+      if (htmlLink) {
+        updateData.html_link = htmlLink;
+      }
+      
+      // Update status: saving HTML
+      await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'saving_html');
+      
       // Save to tasks table if task_id or content_plan_outline_guid was provided
       if (task_id) {
-        const { error: updateError } = await supabaseClient.from('tasks').update({
-          post_html: renderedHTML
-        }).eq('task_id', task_id);
+        const { error: updateError } = await supabaseClient
+          .from('tasks')
+          .update(updateData)
+          .eq('task_id', task_id);
         if (updateError) {
-          console.error('Error saving post_html to tasks:', updateError);
+          console.error('Error saving post_html/content/html_link to tasks:', updateError);
         // Don't fail the request, just log the error
         } else {
-          console.log(`Saved post_html to tasks table for task_id: ${task_id}`);
+          console.log(`Saved post_html, content, and html_link to tasks table for task_id: ${task_id}`);
+          if (htmlLink) {
+            console.log(`  html_link: ${htmlLink}`);
+          }
         }
       } else if (content_plan_outline_guid && !rich_json) {
         // Only save if we fetched from database (not if rich_json was passed directly)
-        const { error: updateError } = await supabaseClient.from('tasks').update({
-          post_html: renderedHTML
-        }).eq('content_plan_outline_guid', content_plan_outline_guid);
+        const { error: updateError } = await supabaseClient
+          .from('tasks')
+          .update(updateData)
+          .eq('content_plan_outline_guid', content_plan_outline_guid);
         if (updateError) {
-          console.error('Error saving post_html to tasks:', updateError);
+          console.error('Error saving post_html/content/html_link to tasks:', updateError);
         } else {
-          console.log(`Saved post_html to tasks table for outline_guid: ${content_plan_outline_guid}`);
+          console.log(`Saved post_html, content, and html_link to tasks table for outline_guid: ${content_plan_outline_guid}`);
+          if (htmlLink) {
+            console.log(`  html_link: ${htmlLink}`);
+          }
         }
       }
+      
+      // Update status: HTML generation complete
+      await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'html_generation_complete');
+      
       return new Response(renderedHTML, {
         headers: {
           ...corsHeaders,
