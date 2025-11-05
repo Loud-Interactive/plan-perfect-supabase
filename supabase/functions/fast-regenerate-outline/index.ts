@@ -69,17 +69,26 @@ serve(async (req) => {
             status: 'fast_outline_regeneration_started'
           });
 
-        // Get original outline
-        const { data: originalOutlineData, error: originalOutlineError } = await supabase
+        // Get original outline (optional - may not exist)
+        const { data: originalOutlineDataArray, error: originalOutlineError } = await supabase
           .from('content_plan_outlines_ai')
           .select('*')
           .eq('job_id', job_id)
           .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
+          .limit(1);
 
-        if (originalOutlineError || !originalOutlineData) {
-          throw new Error(`Original outline not found: ${originalOutlineError?.message || 'Unknown error'}`);
+        if (originalOutlineError) {
+          console.warn(`Warning: Error fetching original outline: ${originalOutlineError.message}. Continuing without original outline.`);
+        }
+
+        const originalOutlineData = originalOutlineDataArray && originalOutlineDataArray.length > 0 
+          ? originalOutlineDataArray[0] 
+          : null;
+        
+        const hasOriginalOutline = originalOutlineData !== null;
+        
+        if (!hasOriginalOutline) {
+          console.log(`No previous outline found for job_id ${job_id}. Will generate new outline from research results.`);
         }
 
         // Get search results
@@ -210,8 +219,6 @@ serve(async (req) => {
           return context;
         }).join('\n---\n');
 
-        const originalOutline = originalOutlineData.outline;
-
         // Get current date for prompt context
         const currentDate = new Date();
         const formattedDate = currentDate.toLocaleDateString('en-US', { 
@@ -221,10 +228,32 @@ serve(async (req) => {
           day: 'numeric' 
         });
 
-        const regenerationPrompt = `**CURRENT DATE**: ${formattedDate}
-**IMPORTANT**: Ensure the improved outline structure reflects current trends and information as of this date. Avoid outdated approaches or time-sensitive content that may no longer be relevant.
+        // Build prompt based on whether original outline exists
+        const originalOutlineSection = hasOriginalOutline
+          ? `**ORIGINAL OUTLINE** (needs improvement):
+${JSON.stringify(originalOutlineData.outline, null, 2)}
 
-You are improving an existing content outline for "${job.post_title}".
+`
+          : `**NOTE**: No previous outline was found for this content. Create a comprehensive new outline from scratch based on the research results and brand information provided below.
+
+`;
+
+        const taskDescription = hasOriginalOutline
+          ? `You are improving an existing content outline for "${job.post_title}".`
+          : `You are creating a comprehensive content outline for "${job.post_title}" from scratch.`;
+
+        const improvementRequirements = hasOriginalOutline
+          ? `2. Make it MORE comprehensive and better structured than the original
+3. Address gaps and weaknesses in the original outline
+4.`
+          : `2. Create a comprehensive outline that covers all important aspects of the topic
+3. Ensure the outline is well-structured and logically organized
+4.`;
+
+        const regenerationPrompt = `**CURRENT DATE**: ${formattedDate}
+**IMPORTANT**: Ensure the outline structure reflects current trends and information as of this date. Avoid outdated approaches or time-sensitive content that may no longer be relevant.
+
+${taskDescription}
 
 **Article Information**:
 - Title: "${job.post_title}"
@@ -235,17 +264,12 @@ You are improving an existing content outline for "${job.post_title}".
 **Brand Profile**:
 ${JSON.stringify(brandProfile, null, 2)}
 ${competitorGuidance}${brandPositioningGuidance}${targetAudienceGuidance}
-**ORIGINAL OUTLINE** (needs improvement):
-${JSON.stringify(originalOutline, null, 2)}
-
-**Research Results**:
+${originalOutlineSection}**Research Results**:
 ${researchContext}
 
 **REQUIREMENTS**:
 1. Create 5-7 main sections (H2 headings) with 3-4 subsections (H3 headings) each
-2. Make it MORE comprehensive and better structured than the original
-3. Address gaps and weaknesses in the original outline
-4. Incorporate the SEO keyword "${job.post_keyword}" naturally
+${improvementRequirements} Incorporate the SEO keyword "${job.post_keyword}" naturally
 5. Have a more logical flow and structure
 6. Include stronger, more engaging section titles
 7. Cover current best practices and recent developments
