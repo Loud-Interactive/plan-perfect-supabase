@@ -85,7 +85,7 @@ export async function sendCentrWebhook(
   event: string,
   data: any,
   guid?: string
-): Promise<{ success: boolean; error?: string; statusCode?: number }> {
+): Promise<{ success: boolean; error?: string; statusCode?: number; payload?: any }> {
   try {
     // Use task_id as the GUID
     const eventGuid = data.task_id || guid || globalThis.crypto.randomUUID();
@@ -205,11 +205,12 @@ export async function sendCentrWebhook(
       return {
         success: false,
         error: `HTTP ${response.status}: ${response.statusText}`,
-        statusCode: response.status
+        statusCode: response.status,
+        payload: payloadWithSignature  // Include payload even on error for logging
       };
     }
 
-    return { success: true, statusCode: response.status };
+    return { success: true, statusCode: response.status, payload: payloadWithSignature };
   } catch (error) {
     return {
       success: false,
@@ -374,12 +375,12 @@ export async function triggerCentrWebhooks(
     webhooks.map(async (webhook) => {
       const result = await sendCentrWebhook(webhook, event, data, guid);
 
-      // Log the event
+      // Log the event with the actual formatted payload that was sent
       await logWebhookEvent(
         supabase,
         webhook.id,
         event,
-        data,
+        result.payload || data,  // Use formatted payload if available, fallback to data
         result.success ? "delivered" : "failed",
         result.statusCode,
         result.error

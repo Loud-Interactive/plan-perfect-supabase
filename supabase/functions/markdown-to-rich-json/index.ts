@@ -424,10 +424,14 @@ serve(async (req) => {
 
     let markdownContent: string;
     let domain: string | undefined;
+    let taskHeroImageUrl: string | null = null;
+    let taskHeroImagePrompt: string | null = null;
+    let taskContentPlanOutlineGuid: string | null = null;
 
     // If markdown is provided directly, use it
     if (markdown) {
       markdownContent = markdown;
+      taskContentPlanOutlineGuid = content_plan_outline_guid || null;
     } else {
       // Validate that at least one identifier is provided
       if (!task_id && !content_plan_outline_guid) {
@@ -445,10 +449,10 @@ serve(async (req) => {
       // Update status: starting conversion
       await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'converting_markdown_to_json');
 
-      // Fetch the edited_content and client_domain from tasks table
+      // Fetch the edited_content, client_domain, hero_image_url, and hero_image_prompt from tasks table
       let query = supabaseClient
         .from('tasks')
-        .select('edited_content, client_domain');
+        .select('edited_content, client_domain, hero_image_url, hero_image_prompt, content_plan_outline_guid');
 
       if (task_id) {
         query = query.eq('task_id', task_id);
@@ -490,6 +494,11 @@ serve(async (req) => {
 
       markdownContent = taskData.edited_content;
       domain = taskData.client_domain;
+      
+      // Store task data for hero image check later
+      taskHeroImageUrl = taskData.hero_image_url;
+      taskHeroImagePrompt = taskData.hero_image_prompt;
+      taskContentPlanOutlineGuid = taskData.content_plan_outline_guid || content_plan_outline_guid;
     }
 
     // Update status: parsing markdown
@@ -550,6 +559,49 @@ serve(async (req) => {
       content_plan_outline_guid || null,
       'json_conversion_complete'
     );
+
+    // Check if we need to generate a hero image
+    if (task_id || content_plan_outline_guid) {
+      const outlineGuid = taskContentPlanOutlineGuid || content_plan_outline_guid;
+      
+      if (!taskHeroImageUrl && outlineGuid && taskHeroImagePrompt) {
+        // Generate hero image asynchronously (don't wait for it)
+        (async () => {
+          try {
+            console.log(`[Hero Image] Triggering hero image generation for outline: ${outlineGuid}`);
+            const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+            const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+            
+            const heroImageResponse = await fetch(`${supabaseUrl}/functions/v1/generate-hero-image`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${supabaseServiceKey}`
+              },
+              body: JSON.stringify({
+                guid: outlineGuid,
+                regenerate: false
+              })
+            });
+
+            if (heroImageResponse.ok) {
+              const heroImageResult = await heroImageResponse.json();
+              console.log(`[Hero Image] Hero image generation initiated:`, heroImageResult);
+            } else {
+              const errorText = await heroImageResponse.text();
+              console.warn(`[Hero Image] Failed to trigger hero image generation: ${errorText}`);
+            }
+          } catch (heroImageError) {
+            console.error('[Hero Image] Error triggering hero image generation:', heroImageError);
+            // Don't fail the main request if hero image generation fails
+          }
+        })();
+      } else if (!taskHeroImageUrl && outlineGuid && !taskHeroImagePrompt) {
+        console.log(`[Hero Image] Skipping hero image generation - no hero_image_prompt found for outline: ${outlineGuid}`);
+      } else if (taskHeroImageUrl) {
+        console.log(`[Hero Image] Hero image already exists for outline: ${outlineGuid}`);
+      }
+    }
 
     return new Response(JSON.stringify(richJson), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

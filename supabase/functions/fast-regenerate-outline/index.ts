@@ -103,8 +103,10 @@ serve(async (req) => {
 
         console.log(`Retrieved ${searchResults?.length || 0} search results`);
 
-        if (!searchResults || searchResults.length === 0) {
-          throw new Error('No search results found for regeneration');
+        // If no search results, log it but continue with generation
+        const hasSearchResults = searchResults && searchResults.length > 0;
+        if (!hasSearchResults) {
+          console.log(`No search results found for job_id ${job_id}. Will generate outline using job information and brand profile.`);
         }
 
         await supabase
@@ -190,34 +192,36 @@ serve(async (req) => {
           restrictionNotes += `\n\n**DO NOT CITE THESE DOMAINS**: ${brandProfile.competitor_domains}`;
         }
 
-        // Build research context
-        const researchContext = searchResults.map((result, index) => {
-          let context = `\n## Result ${index + 1}\n`;
-          context += `**Title**: ${result.title}\n`;
-          context += `**URL**: ${result.url}\n`;
-          context += `**Description**: ${result.description || 'N/A'}\n`;
+        // Build research context (empty if no search results)
+        const researchContext = hasSearchResults
+          ? searchResults.map((result, index) => {
+              let context = `\n## Result ${index + 1}\n`;
+              context += `**Title**: ${result.title}\n`;
+              context += `**URL**: ${result.url}\n`;
+              context += `**Description**: ${result.description || 'N/A'}\n`;
 
-          if (result.headings_array && result.headings_array.length > 0) {
-            context += `**Headings**:\n${result.headings_array.join('\n')}\n`;
-          }
+              if (result.headings_array && result.headings_array.length > 0) {
+                context += `**Headings**:\n${result.headings_array.join('\n')}\n`;
+              }
 
-          if (result.quotes_array && result.quotes_array.length > 0) {
-            context += `**Key Quotes**:\n`;
-            result.quotes_array.forEach((quote: any) => {
-              context += `- "${quote.text}" (Source: ${quote.citation})\n`;
-            });
-          }
+              if (result.quotes_array && result.quotes_array.length > 0) {
+                context += `**Key Quotes**:\n`;
+                result.quotes_array.forEach((quote: any) => {
+                  context += `- "${quote.text}" (Source: ${quote.citation})\n`;
+                });
+              }
 
-          if (result.content) {
-            const maxContentLength = 1500;
-            const truncatedContent = result.content.length > maxContentLength
-              ? result.content.substring(0, maxContentLength) + '...'
-              : result.content;
-            context += `**Content Preview**:\n${truncatedContent}\n`;
-          }
+              if (result.content) {
+                const maxContentLength = 1500;
+                const truncatedContent = result.content.length > maxContentLength
+                  ? result.content.substring(0, maxContentLength) + '...'
+                  : result.content;
+                context += `**Content Preview**:\n${truncatedContent}\n`;
+              }
 
-          return context;
-        }).join('\n---\n');
+              return context;
+            }).join('\n---\n')
+          : `\n**NOTE**: No search results were available for this content. Generate the outline based on the title, keywords, and brand information provided below.\n`;
 
         // Get current date for prompt context
         const currentDate = new Date();
@@ -264,7 +268,7 @@ ${taskDescription}
 **Brand Profile**:
 ${JSON.stringify(brandProfile, null, 2)}
 ${competitorGuidance}${brandPositioningGuidance}${targetAudienceGuidance}
-${originalOutlineSection}**Research Results**:
+${originalOutlineSection}${hasSearchResults ? '**Research Results**:' : '**Research Results**: (No search results available - generate outline based on title, keywords, and brand information)'}
 ${researchContext}
 
 **REQUIREMENTS**:
@@ -276,6 +280,7 @@ ${improvementRequirements} Incorporate the SEO keyword "${job.post_keyword}" nat
 8. Be more SEO-friendly and user-focused
 9. Match the brand voice: ${brandProfile.voice_traits || 'professional and authoritative'}
 10. Align with brand values: ${brandProfile.brand_values}${restrictionNotes}
+${!hasSearchResults ? '11. Since no research results are available, create a comprehensive outline based on the title, keywords, and brand information provided above.' : ''}
 
 **OUTPUT FORMAT**:
 Return ONLY a valid JSON object matching this exact structure:

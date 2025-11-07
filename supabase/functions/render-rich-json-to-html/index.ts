@@ -56,8 +56,9 @@ async function updateTaskStatus(
         <ul>\n`;
       section.subsections.forEach((subsection, subIdx)=>{
         const subsectionId = `${sectionId}_SubSection_${subIdx + 1}`;
+        const subsectionTitle = subsection.heading || subsection.title || `Subsection ${subIdx + 1}`;
         toc += `          <li>
-            <a href="#${subsectionId}">${subsection.heading}</a>
+            <a href="#${subsectionId}">${subsectionTitle}</a>
           </li>\n`;
       });
       toc += `        </ul>
@@ -120,14 +121,18 @@ function convertReferencesToLinks(content) {
 </h2>\n`;
     section.subsections.forEach((subsection, subIdx)=>{
       const subsectionId = `${sectionId}_SubSection_${subIdx + 1}`;
-      html += `<h3 id="${subsectionId}">${subsection.heading}</h3>\n`;
+      const subsectionTitle = subsection.heading || subsection.title || '';
+      // Only render H3 if there's a title
+      if (subsectionTitle) {
+        html += `<h3 id="${subsectionId}">${subsectionTitle}</h3>\n`;
+      }
       // Insert left callout after first subsection of second section
-      if (sectionIdx === 1 && subIdx === 0 && !leftCalloutUsed && article.callouts.left.text) {
+      if (sectionIdx === 1 && subIdx === 0 && !leftCalloutUsed && article.callouts?.left?.text) {
         html += '\n' + generateCallout(article.callouts.left, 'left') + '\n\n';
         leftCalloutUsed = true;
       }
       // Insert right callout after first subsection of third section
-      if (sectionIdx === 2 && subIdx === 0 && !rightCalloutUsed && article.callouts.right.text) {
+      if (sectionIdx === 2 && subIdx === 0 && !rightCalloutUsed && article.callouts?.right?.text) {
         html += '\n' + generateCallout(article.callouts.right, 'right') + '\n\n';
         rightCalloutUsed = true;
       }
@@ -188,7 +193,7 @@ function convertReferencesToLinks(content) {
   <ol>\n`;
   references.forEach((ref)=>{
     html += `    <li id="ref${ref.number}">
-      <a href="${ref.url}">${ref.citation}</a>
+      <a href="${ref.url}">${ref.url}</a>
     </li>\n`;
   });
   html += `  </ol>
@@ -534,6 +539,7 @@ serve(async (req)=>{
       // Add html_link if we have it
       if (htmlLink) {
         updateData.html_link = htmlLink;
+        updateData.supabase_html_url = htmlLink; // Also update supabase_html_url
       }
       
       // Update status: saving HTML
@@ -549,9 +555,10 @@ serve(async (req)=>{
           console.error('Error saving post_html/content/html_link to tasks:', updateError);
         // Don't fail the request, just log the error
         } else {
-          console.log(`Saved post_html, content, and html_link to tasks table for task_id: ${task_id}`);
+          console.log(`Saved post_html, content, html_link, and supabase_html_url to tasks table for task_id: ${task_id}`);
           if (htmlLink) {
             console.log(`  html_link: ${htmlLink}`);
+            console.log(`  supabase_html_url: ${htmlLink}`);
           }
         }
       } else if (content_plan_outline_guid && !rich_json) {
@@ -563,15 +570,16 @@ serve(async (req)=>{
         if (updateError) {
           console.error('Error saving post_html/content/html_link to tasks:', updateError);
         } else {
-          console.log(`Saved post_html, content, and html_link to tasks table for outline_guid: ${content_plan_outline_guid}`);
+          console.log(`Saved post_html, content, html_link, and supabase_html_url to tasks table for outline_guid: ${content_plan_outline_guid}`);
           if (htmlLink) {
             console.log(`  html_link: ${htmlLink}`);
+            console.log(`  supabase_html_url: ${htmlLink}`);
           }
         }
       }
       
       // Update status: HTML generation complete
-      await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'html_generation_complete');
+      await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'Completed');
       
       return new Response(renderedHTML, {
         headers: {

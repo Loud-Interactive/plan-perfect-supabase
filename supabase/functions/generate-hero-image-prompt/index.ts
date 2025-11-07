@@ -26,7 +26,7 @@ serve(async (req) => {
   
   try {
     // Parse the request body
-    const { content_plan_outline_guid } = await req.json()
+    const { content_plan_outline_guid, use_unedited_content = false } = await req.json()
     
     if (!content_plan_outline_guid) {
       return new Response(JSON.stringify({ error: 'content_plan_outline_guid is required' }), {
@@ -36,6 +36,7 @@ serve(async (req) => {
     }
     
     console.log(`Generating hero image prompt for content plan outline GUID: ${content_plan_outline_guid}`)
+    console.log(`Using unedited_content: ${use_unedited_content}`)
     
     // Initialize Supabase client
     const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
@@ -59,18 +60,44 @@ serve(async (req) => {
       });
     }
     
-    // Extract the HTML content and client domain
-    const htmlContent = taskData.content;
+    // Extract the content and client domain based on the flag
     const clientDomain = taskData.client_domain;
+    let markdownContent: string;
     
-    if (!htmlContent) {
-      console.error('No content available to generate hero image prompt');
-      return new Response(JSON.stringify({ 
-        error: 'No content available in the task' 
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    if (use_unedited_content) {
+      // Use unedited_content which is already markdown
+      const uneditedContent = taskData.unedited_content;
+      
+      if (!uneditedContent) {
+        console.error('No unedited_content available to generate hero image prompt');
+        return new Response(JSON.stringify({ 
+          error: 'No unedited_content available in the task' 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
+      markdownContent = uneditedContent;
+      console.log(`Using unedited_content (already markdown) (${markdownContent.length} characters)`);
+    } else {
+      // Use content which is HTML, convert to markdown
+      const htmlContent = taskData.content;
+      
+      if (!htmlContent) {
+        console.error('No content available to generate hero image prompt');
+        return new Response(JSON.stringify({ 
+          error: 'No content available in the task' 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
+      // Convert HTML to Markdown
+      const turndownService = new TurndownService();
+      markdownContent = turndownService.turndown(htmlContent);
+      console.log(`Converted HTML to Markdown (${markdownContent.length} characters)`);
     }
     
     // Check for custom hero_image_base_prompt and aspect_ratio in pairs table
@@ -90,7 +117,7 @@ serve(async (req) => {
       
       if (basePromptData && basePromptData.value) {
         customBasePrompt = basePromptData.value;
-        console.log(`Found custom base prompt for ${clientDomain}: ${customBasePrompt.substring(0, 100)}...`);
+        console.log(`Found custom base prompt for ${clientDomain}: ${basePromptData.value.substring(0, 100)}...`);
       } else {
         console.log(`No custom base prompt found for ${clientDomain}, using default templates`);
       }
@@ -110,12 +137,6 @@ serve(async (req) => {
         console.log(`No custom aspect ratio found for ${clientDomain}, using default 16:9`);
       }
     }
-    
-    // Convert HTML to Markdown
-    const turndownService = new TurndownService();
-    const markdownContent = turndownService.turndown(htmlContent);
-    
-    console.log(`Converted HTML to Markdown (${markdownContent.length} characters)`);
     
     // Prepare the prompt for hero image prompt generation
     // If custom base prompt exists, incorporate it into the instructions
@@ -439,6 +460,7 @@ Generate a single, cohesive paragraph describing the complete scene. Write your 
       content_plan_outline_guid,
       image_prompt: imagePrompt,
       thinking: thinkingText,
+      content_source: use_unedited_content ? 'unedited_content' : 'content',
       custom_base_prompt_used: !!customBasePrompt,
       aspect_ratio: customAspectRatio,
       save_status: {
