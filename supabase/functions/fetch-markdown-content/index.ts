@@ -1,5 +1,6 @@
 // supabase/functions/fetch-markdown-content/index.ts
-// Enhanced function to fetch HTML content using ScraperAPI and convert to markdown
+// Enhanced function to fetch content and convert to markdown
+// Uses Jina AI Reader API first, falls back to ScraperAPI, then Markdowner API as final fallback
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { cleanText, processHtmlContent } from '../_shared/encoding-utils.ts';
 
@@ -53,21 +54,64 @@ serve(async (req) => {
     let markdown = '';
     let method = '';
 
-    // Try ScraperAPI first, fallback to Markdowner API if requested or if ScraperAPI fails
-    if (!use_fallback) {
-      try {
-        const htmlContent = await fetchWithScraperAPI(url);
-        markdown = htmlToMarkdown(htmlContent);
-        method = 'scraperapi';
-        console.log(`Successfully converted URL to Markdown using ScraperAPI (${markdown.length} characters)`);
-      } catch (scraperError) {
-        console.warn(`ScraperAPI failed: ${scraperError.message}, falling back to Markdowner API`);
-        markdown = await fetchWithMarkdownerAPI(url);
-        method = 'markdowner_fallback';
+    // Try Jina AI first, then ScraperAPI, then Markdowner as final fallback
+    try {
+      // Try Jina AI Reader API first
+      console.log('Attempting to convert URL to Markdown using Jina AI Reader API...');
+      const jinaApiUrl = `https://r.jina.ai/${url}`;
+      const jinaApiKey = Deno.env.get('JINA_API_KEY') || 'jina_335b0361bef84b3694f1f8f23184b552j_S3s2fdN5mu5w3DXzq54O9DtCBe';
+      
+      const jinaResponse = await fetch(jinaApiUrl, {
+        headers: {
+          'Authorization': `Bearer ${jinaApiKey}`
+        }
+      });
+
+      if (jinaResponse.ok) {
+        markdown = await jinaResponse.text();
+        method = 'jina_ai';
+        console.log(`Successfully converted URL to Markdown using Jina AI (${markdown.length} characters)`);
+      } else {
+        const errorText = await jinaResponse.text();
+        console.warn(`Jina AI failed: ${jinaResponse.status} ${jinaResponse.statusText} - ${errorText}`);
+        throw new Error(`Jina AI failed: ${jinaResponse.statusText} - ${errorText}`);
       }
-    } else {
-      markdown = await fetchWithMarkdownerAPI(url);
-      method = 'markdowner';
+    } catch (jinaError) {
+      console.warn(`Jina AI conversion failed: ${jinaError.message}`);
+      
+      // Fallback to ScraperAPI (unless use_fallback flag is set)
+      if (use_fallback) {
+        console.log('use_fallback flag is set, skipping ScraperAPI and going directly to Markdowner API...');
+        try {
+          markdown = await fetchWithMarkdownerAPI(url);
+          method = 'markdowner_fallback';
+          console.log(`Successfully converted URL to Markdown using Markdowner API (${markdown.length} characters)`);
+        } catch (markdownerError) {
+          console.error(`All conversion methods failed. Jina: ${jinaError.message}, Markdowner: ${markdownerError.message}`);
+          throw new Error(`Failed to convert URL to markdown with all services. Jina: ${jinaError.message}, Markdowner: ${markdownerError.message}`);
+        }
+      } else {
+        // Try ScraperAPI second
+        try {
+          console.log('Trying ScraperAPI...');
+          const htmlContent = await fetchWithScraperAPI(url);
+          markdown = htmlToMarkdown(htmlContent);
+          method = 'scraperapi';
+          console.log(`Successfully converted URL to Markdown using ScraperAPI (${markdown.length} characters)`);
+        } catch (scraperError) {
+          console.warn(`ScraperAPI failed: ${scraperError.message}, falling back to Markdowner API...`);
+          
+          // Final fallback to Markdowner API
+          try {
+            markdown = await fetchWithMarkdownerAPI(url);
+            method = 'markdowner_fallback';
+            console.log(`Successfully converted URL to Markdown using Markdowner API (${markdown.length} characters)`);
+          } catch (markdownerError) {
+            console.error(`All conversion methods failed. Jina: ${jinaError.message}, ScraperAPI: ${scraperError.message}, Markdowner: ${markdownerError.message}`);
+            throw new Error(`Failed to convert URL to markdown with all services. Jina: ${jinaError.message}, ScraperAPI: ${scraperError.message}, Markdowner: ${markdownerError.message}`);
+          }
+        }
+      }
     }
 
     return new Response(JSON.stringify({ 

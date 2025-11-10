@@ -66,11 +66,28 @@ serve(async (req) => {
           throw new Error(`Job details not found: ${jobDetailsError?.message || 'Unknown error'}`);
         }
 
-        // Update status
-        await supabase
-          .from('outline_generation_jobs')
-          .update({ status: 'fast_searching', updated_at: new Date().toISOString() })
-          .eq('id', job_id);
+        // Reset retry count when starting a new search attempt (handle gracefully if columns don't exist)
+        try {
+          await supabase
+            .from('outline_generation_jobs')
+            .update({
+              status: 'fast_searching',
+              fast_search_retry_count: 0, // Reset retry count on new attempt
+              fast_search_retry_at: null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', job_id);
+        } catch (resetError) {
+          // If retry columns don't exist, just update status
+          console.warn('Could not reset retry columns (may not exist yet), updating status only:', resetError);
+          await supabase
+            .from('outline_generation_jobs')
+            .update({
+              status: 'fast_searching',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', job_id);
+        }
 
         await supabase
           .from('content_plan_outline_statuses')
@@ -251,23 +268,23 @@ Return all 10 results (index 0-9). Response must be valid JSON only - no explana
           apiKey: Deno.env.get('GROQ_API_KEY') || '',
         });
 
-        // Retry logic with exponential backoff
+        // Retry logic with exponential backoff for Groq API calls
         let fullResponse = '';
         let collectedToolCalls: any[] = [];
-        const maxRetries = 3;
-        let attempt = 0;
-        let lastError: any = null;
+        const maxGroqRetries = 5; // Increased from 3 to 5
+        let groqAttempt = 0;
+        let lastGroqError: any = null;
 
-        while (attempt < maxRetries) {
+        while (groqAttempt < maxGroqRetries) {
           try {
-            attempt++;
-            console.log(`Groq API call attempt ${attempt}/${maxRetries}...`);
+            groqAttempt++;
+            console.log(`Groq API call attempt ${groqAttempt}/${maxGroqRetries}...`);
 
             await supabase
               .from('content_plan_outline_statuses')
               .insert({
                 outline_guid: job_id,
-                status: `groq_attempt_${attempt}`
+                status: `groq_attempt_${groqAttempt}`
               });
 
             // Use streaming with browser_search tool
@@ -275,8 +292,8 @@ Return all 10 results (index 0-9). Response must be valid JSON only - no explana
             let attemptPrompt = prompt;
             let useJsonMode = false; // Can't use json_object mode with tools
 
-            if (attempt > 1) {
-              attemptPrompt = `${prompt}\n\nATTENPT ${attempt}/3: Previous attempt failed. You MUST use web search and return valid JSON. Do not apologize, do not explain why you can't - just search and return the JSON structure requested.`;
+            if (groqAttempt > 1) {
+              attemptPrompt = `${prompt}\n\nATTEMPT ${groqAttempt}/5: Previous attempt failed. You MUST use web search and return valid JSON. Do not apologize, do not explain why you can't - just search and return the JSON structure requested.`;
             }
 
             const requestConfig: any = {
@@ -306,7 +323,7 @@ Return all 10 results (index 0-9). Response must be valid JSON only - no explana
             //   requestConfig.response_format = { type: "json_object" };
             // }
 
-            console.log(`Attempt ${attempt}: Calling Groq with browser_search tool...`);
+            console.log(`Attempt ${groqAttempt}: Calling Groq with browser_search tool...`);
             const stream = await groq.chat.completions.create(requestConfig);
 
             console.log('Groq streaming started...');
@@ -371,12 +388,13 @@ Return all 10 results (index 0-9). Response must be valid JSON only - no explana
             }
 
           } catch (error) {
-            lastError = error;
-            console.error(`Attempt ${attempt} failed:`, error.message);
+            lastGroqError = error;
+            console.error(`Groq API attempt ${groqAttempt} failed:`, error.message);
 
-            if (attempt < maxRetries) {
-              const backoffMs = Math.min(1000 * Math.pow(2, attempt), 10000);
-              console.log(`Retrying in ${backoffMs}ms...`);
+            if (groqAttempt < maxGroqRetries) {
+              // Exponential backoff: 1s, 2s, 4s, 8s, 16s (capped at 16s)
+              const backoffMs = Math.min(1000 * Math.pow(2, groqAttempt - 1), 16000);
+              console.log(`Retrying Groq API call in ${backoffMs}ms (exponential backoff)...`);
               await new Promise(resolve => setTimeout(resolve, backoffMs));
             }
           }
@@ -384,7 +402,7 @@ Return all 10 results (index 0-9). Response must be valid JSON only - no explana
 
         // If all retries failed, throw the last error
         if (!fullResponse || fullResponse.length < 100) {
-          throw new Error(`Failed after ${maxRetries} attempts. Last error: ${lastError?.message || 'Unknown error'}`);
+          throw new Error(`Groq API failed after ${maxGroqRetries} attempts. Last error: ${lastGroqError?.message || 'Unknown error'}`);
         }
 
         await supabase
@@ -561,21 +579,122 @@ Return all 10 results (index 0-9). Response must be valid JSON only - no explana
         try {
           if (job_id) {
             const supabase = createClient(supabaseUrl, supabaseServiceKey);
-            await supabase
-              .from('outline_generation_jobs')
-              .update({
-                status: 'failed',
-                updated_at: new Date().toISOString(),
-                heartbeat: new Date().toISOString()
-              })
-              .eq('id', job_id);
+            
+            // Get current retry count (handle gracefully if column doesn't exist)
+            let currentRetryCount = 0;
+            try {
+              const { data: currentJob } = await supabase
+                .from('outline_generation_jobs')
+                .select('fast_search_retry_count')
+                .eq('id', job_id)
+                .single();
+              
+              currentRetryCount = currentJob?.fast_search_retry_count || 0;
+            } catch (selectError) {
+              console.warn('Could not read retry count (column may not exist):', selectError);
+              currentRetryCount = 0;
+            }
+            
+            const maxSearchRetries = 3;
+            
+            if (currentRetryCount < maxSearchRetries) {
+              // Retry the search
+              const newRetryCount = currentRetryCount + 1;
+              const retryDelaySeconds = Math.min(60 * Math.pow(2, currentRetryCount), 300); // Exponential backoff: 60s, 120s, 240s (max 5min)
+              
+              console.log(`Fast search failed (attempt ${currentRetryCount + 1}/${maxSearchRetries}). Scheduling retry in ${retryDelaySeconds}s...`);
+              
+              // Update job status with retry info (handle gracefully if columns don't exist)
+              try {
+                await supabase
+                  .from('outline_generation_jobs')
+                  .update({
+                    status: 'failed',
+                    fast_search_retry_count: newRetryCount,
+                    fast_search_retry_at: new Date(Date.now() + retryDelaySeconds * 1000).toISOString(),
+                    updated_at: new Date().toISOString(),
+                    heartbeat: new Date().toISOString()
+                  })
+                  .eq('id', job_id);
+              } catch (updateError) {
+                // If columns don't exist, just update status
+                console.warn('Could not update retry columns (may not exist yet), updating status only:', updateError);
+                await supabase
+                  .from('outline_generation_jobs')
+                  .update({
+                    status: 'failed',
+                    updated_at: new Date().toISOString(),
+                    heartbeat: new Date().toISOString()
+                  })
+                  .eq('id', job_id);
+              }
 
-            await supabase
-              .from('content_plan_outline_statuses')
-              .insert({
-                outline_guid: job_id,
-                status: `fast_search_error: ${backgroundError.message.substring(0, 100)}`
-              });
+              await supabase
+                .from('content_plan_outline_statuses')
+                .insert({
+                  outline_guid: job_id,
+                  status: `fast_search_failed_retry_${newRetryCount}_of_${maxSearchRetries}: ${backgroundError.message.substring(0, 100)}`
+                });
+              
+              // Schedule retry by calling the function again after delay
+              setTimeout(async () => {
+                try {
+                  console.log(`Retrying fast search (attempt ${newRetryCount}/${maxSearchRetries})...`);
+                  const retryResponse = await fetch(`${supabaseUrl}/functions/v1/fast-outline-search`, {
+                    method: 'POST',
+                    headers: {
+                      'Authorization': `Bearer ${supabaseServiceKey}`,
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ job_id })
+                  });
+                  
+                  if (!retryResponse.ok) {
+                    const errorText = await retryResponse.text();
+                    console.error(`Retry attempt ${newRetryCount} failed to trigger:`, errorText);
+                  } else {
+                    console.log(`Retry attempt ${newRetryCount} triggered successfully`);
+                  }
+                } catch (retryError) {
+                  console.error(`Error triggering retry attempt ${newRetryCount}:`, retryError);
+                }
+              }, retryDelaySeconds * 1000);
+              
+            } else {
+              // Max retries reached - mark as permanently failed
+              console.error(`Fast search failed after ${maxSearchRetries} attempts. Marking as permanently failed.`);
+              
+              // Update job status (handle gracefully if retry columns don't exist)
+              try {
+                await supabase
+                  .from('outline_generation_jobs')
+                  .update({
+                    status: 'failed',
+                    fast_search_retry_count: maxSearchRetries,
+                    updated_at: new Date().toISOString(),
+                    heartbeat: new Date().toISOString()
+                  })
+                  .eq('id', job_id);
+              } catch (updateError) {
+                // If columns don't exist, just update status
+                console.warn('Could not update retry columns (may not exist yet), updating status only:', updateError);
+                await supabase
+                  .from('outline_generation_jobs')
+                  .update({
+                    status: 'failed',
+                    updated_at: new Date().toISOString(),
+                    heartbeat: new Date().toISOString()
+                  })
+                  .eq('id', job_id);
+              }
+
+              await supabase
+                .from('content_plan_outline_statuses')
+                .insert({
+                  outline_guid: job_id,
+                  status: `fast_search_failed_max_retries_exceeded: ${backgroundError.message.substring(0, 100)}`
+                });
+            }
           }
         } catch (updateError) {
           console.error('Error updating job status:', updateError);

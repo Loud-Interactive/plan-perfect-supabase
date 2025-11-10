@@ -14,6 +14,10 @@ interface Section {
     title: string;
     content: string;
   }>;
+  callout?: {
+    text: string;
+    position: 'left' | 'right';
+  };
 }
 
 interface Summary {
@@ -87,7 +91,7 @@ Return the JSON array only, no other text.`;
       {
         modelName: 'moonshotai/kimi-k2-instruct-0905',
         temperature: 0.7,
-        maxTokens: 800
+        maxTokens: 4000
       }
     );
 
@@ -181,7 +185,7 @@ Return ONLY the summary paragraph, nothing else. Do not include a title or any o
       {
         modelName: 'moonshotai/kimi-k2-instruct-0905',
         temperature: 0.7,
-        maxTokens: 500
+        maxTokens: 4000
       }
     );
 
@@ -251,6 +255,146 @@ async function updateTaskStatus(
   } catch (error) {
     console.warn(`[Status] Failed to update status to ${status}:`, error);
   }
+}
+
+/**
+ * Check if a section should be excluded from callout generation
+ */
+function isExcludedSection(heading: string): boolean {
+  const excludedSections = ['summary', 'toc', 'table of contents', 'key-takeaways', 'key takeaways', 'references', 'conclusion', 'final thoughts', 'wrapping up', 'closing thoughts'];
+  const headingLower = heading.toLowerCase();
+  return excludedSections.some(excluded => headingLower.includes(excluded));
+}
+
+/**
+ * Generate callout text for a section using Groq Kimi K2
+ */
+async function generateCalloutForSection(
+  section: Section,
+  groqApiKey: string,
+  domain?: string
+): Promise<string | null> {
+  if (!groqApiKey) {
+    console.warn('[generateCalloutForSection] No Groq API key, skipping callout generation');
+    return null;
+  }
+
+  // Combine subsection content for context
+  const sectionContent = section.subsections
+    .map(sub => sub.content)
+    .join(' ')
+    .substring(0, 2000); // Limit to 2000 chars for context
+
+  const prompt = `Based on this section content, generate ONE compelling sentence that captures its essence.
+
+Section Heading: ${section.heading}
+Section Content: ${sectionContent}
+
+Requirements:
+- Single sentence only (can be a statement or question)
+- Directly derived from actual content (not hypothetical)
+- Do NOT start with: "This section is about", "This section explains", "This section discusses", or "This section outlines"
+- Be specific and actionable
+- Make it engaging and valuable to the reader
+- Capture the essence of what makes this section valuable
+
+Return ONLY the sentence, nothing else.`;
+
+  try {
+    const result = await callGroqWithLogging(
+      'generate-callout-text',
+      prompt,
+      groqApiKey,
+      domain,
+      {
+        modelName: 'moonshotai/kimi-k2-instruct-0905',
+        temperature: 0.7,
+        maxTokens: 150 // One sentence should be relatively short
+      }
+    );
+
+    const calloutText = result.response.trim();
+
+    // Validate result
+    if (!calloutText || calloutText.length < 10) {
+      console.warn(`[generateCalloutForSection] Generated callout text too short for section: ${section.heading}`);
+      return null;
+    }
+
+    // Check for forbidden starts
+    const forbiddenStarts = [
+      'this section is about',
+      'this section explains',
+      'this section discusses',
+      'this section outlines'
+    ];
+
+    const startsWithForbidden = forbiddenStarts.some(start =>
+      calloutText.toLowerCase().startsWith(start)
+    );
+
+    if (startsWithForbidden) {
+      console.warn(`[generateCalloutForSection] Generated text starts with forbidden phrase, cleaning...`);
+      // Remove forbidden prefix
+      const cleaned = calloutText.replace(/^this section (is about|explains|discusses|outlines)[\s:]+/i, '').trim();
+      return cleaned || null;
+    }
+
+    console.log(`[generateCalloutForSection] Generated callout for "${section.heading}": ${calloutText.substring(0, 50)}...`);
+
+    return calloutText;
+  } catch (error) {
+    console.error(`[generateCalloutForSection] Error generating callout for section "${section.heading}":`, error);
+    return null;
+  }
+}
+
+/**
+ * Generate callouts for all eligible sections
+ */
+async function generateCalloutsForSections(
+  sections: Section[],
+  groqApiKey: string,
+  domain?: string
+): Promise<void> {
+  if (!groqApiKey) {
+    console.warn('[generateCalloutsForSections] No Groq API key, skipping callout generation');
+    return;
+  }
+
+  // Filter out excluded sections and track position for alternating
+  const eligibleSections = sections
+    .map((section, index) => ({ section, originalIndex: index }))
+    .filter(({ section }) => !isExcludedSection(section.heading));
+
+  if (eligibleSections.length === 0) {
+    console.log('[generateCalloutsForSections] No eligible sections for callout generation');
+    return;
+  }
+
+  console.log(`[generateCalloutsForSections] Generating callouts for ${eligibleSections.length} sections...`);
+
+  // Generate callouts in parallel for performance
+  const calloutPromises = eligibleSections.map(async ({ section }, eligibleIndex) => {
+    const calloutText = await generateCalloutForSection(section, groqApiKey, domain);
+    
+    if (calloutText) {
+      // Determine position: even index (0, 2, 4...) = left, odd index (1, 3, 5...) = right
+      const position = eligibleIndex % 2 === 0 ? 'left' : 'right';
+      
+      section.callout = {
+        text: calloutText,
+        position: position as 'left' | 'right'
+      };
+      
+      console.log(`[generateCalloutsForSections] Added ${position} callout to section "${section.heading}"`);
+    }
+  });
+
+  await Promise.all(calloutPromises);
+
+  const calloutsAdded = sections.filter(s => s.callout).length;
+  console.log(`[generateCalloutsForSections] Successfully generated ${calloutsAdded} callouts`);
 }
 
 /**
@@ -376,6 +520,9 @@ async function parseMarkdownToRichJson(
     sections.push(currentSection);
   }
 
+  // Generate callouts for eligible sections
+  await generateCalloutsForSections(sections, groqApiKey, domain);
+
   // Generate summary and key points using AI
   const summary = await generateSummary(sections, title, groqApiKey, domain);
 
@@ -460,7 +607,7 @@ serve(async (req) => {
         query = query.eq('content_plan_outline_guid', content_plan_outline_guid);
       }
 
-      const { data: taskData, error: fetchError } = await query.single();
+      const { data: taskDataArray, error: fetchError } = await query.order('created_at', { ascending: false }).limit(1);
 
       if (fetchError) {
         console.error('Error fetching task:', fetchError);
@@ -475,6 +622,21 @@ serve(async (req) => {
           }
         );
       }
+
+      if (!taskDataArray || taskDataArray.length === 0) {
+        return new Response(
+          JSON.stringify({
+            error: 'Task not found',
+            details: `No task found for ${task_id ? `task_id: ${task_id}` : `content_plan_outline_guid: ${content_plan_outline_guid}`}`
+          }),
+          {
+            status: 404,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        );
+      }
+
+      const taskData = taskDataArray[0];
 
       // Update status: fetching markdown
       await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'fetching_markdown');

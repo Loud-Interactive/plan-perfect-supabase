@@ -837,11 +837,11 @@ Format your response as a JSON object with this structure:
           })
           .eq('guid', job_id);
 
-        // Step 8: Update job status to completed
+        // Step 8: Update job status to Completed (final status)
         await supabase
           .from('outline_generation_jobs')
           .update({ 
-            status: 'completed',
+            status: 'Completed',
             updated_at: new Date().toISOString()
           })
           .eq('id', job_id);

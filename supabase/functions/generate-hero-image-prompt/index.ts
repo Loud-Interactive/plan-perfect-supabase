@@ -44,13 +44,14 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
     
     // Get content from the tasks table
-    const { data: taskData, error: taskError } = await supabase
+    const { data: taskDataArray, error: taskError } = await supabase
       .from('tasks')
       .select('*')
       .eq('content_plan_outline_guid', content_plan_outline_guid)
-      .single();
+      .order('created_at', { ascending: false })
+      .limit(1);
     
-    if (taskError || !taskData) {
+    if (taskError || !taskDataArray || taskDataArray.length === 0) {
       console.error('Error fetching task data:', taskError);
       return new Response(JSON.stringify({ 
         error: `Failed to fetch task: ${taskError?.message || 'Task not found'}` 
@@ -59,6 +60,8 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
+    
+    const taskData = taskDataArray[0];
     
     // Extract the content and client domain based on the flag
     const clientDomain = taskData.client_domain;

@@ -56,7 +56,10 @@ serve(async (req) => {
       queuedEvents.map(async (event: any) => {
         try {
           // Format the data according to Centr's expected format
+          // IMPORTANT: Ensure task_id is included for Centr compatibility
+          // Centr uses task_id as the 'id' field, not content_plan_outline_guid
           const formattedData = {
+            task_id: event.payload.task_id || event.id, // Prioritize task_id
             status: event.payload.status || 'Unknown',
             title: event.payload.title || '',
             slug: event.payload.slug || '',
@@ -65,14 +68,20 @@ serve(async (req) => {
             google_doc_link: event.payload.google_doc_link,
             content: event.payload.content,
             seo_keyword: event.payload.seo_keyword,
+            hero_image_url: event.payload.hero_image_url,
+            meta_description: event.payload.meta_description,
+            live_post_url: event.payload.live_post_url,
             ...event.payload
           };
+
+          // Use task_id as guid (Centr expects task_id, not content_plan_outline_guid)
+          const webhookGuid = formattedData.task_id || event.payload.guid || event.id;
 
           await triggerCentrWebhooks(
             supabase,
             event.event_type,
             formattedData,
-            event.payload.guid || event.id
+            webhookGuid
           );
 
           return { success: true, id: event.id };

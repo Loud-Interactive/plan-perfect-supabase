@@ -124,37 +124,73 @@ async function streamSchemaGeneration(
         
         controller.enqueue(encoder.encode(`Starting schema generation for URL: ${postUrl}\n\n`))
 
-        // Step 1: Convert URL to Markdown using Markdowner API
+        // Step 1: Convert URL to Markdown - try Jina AI first, fallback to Markdowner
         controller.enqueue(encoder.encode("Step 1: Converting URL to Markdown...\n"))
         
         let markdown = ""
+        let markdownSource = ""
+        
+        // Try Jina AI Reader API first
         try {
-          console.log("Calling Markdowner API:", `https://md.dhr.wtf/?url=${encodeURIComponent(postUrl)}`)
-          const markdownerApiUrl = `https://md.dhr.wtf/?url=${encodeURIComponent(postUrl)}`
-          const markdownResponse = await fetch(markdownerApiUrl, {
+          controller.enqueue(encoder.encode("Attempting to convert URL to Markdown using Jina AI Reader API...\n"))
+          const jinaApiUrl = `https://r.jina.ai/${postUrl}`
+          const jinaApiKey = Deno.env.get('JINA_API_KEY') || 'jina_335b0361bef84b3694f1f8f23184b552j_S3s2fdN5mu5w3DXzq54O9DtCBe'
+          
+          console.log("Calling Jina AI Reader API:", jinaApiUrl)
+          const jinaResponse = await fetch(jinaApiUrl, {
             headers: {
-              'Authorization': 'Bearer LWdIbnQ4UXhDc0dwX1BvLXNBSEVaLTI='
+              'Authorization': `Bearer ${jinaApiKey}`
             }
           })
 
-          console.log("Received response from Markdowner API, status:", markdownResponse.status)
+          console.log("Received response from Jina AI, status:", jinaResponse.status)
           
-          if (!markdownResponse.ok) {
-            const errorText = await markdownResponse.text()
-            console.error("Markdowner API error:", markdownResponse.status, errorText)
-            throw new Error(`Failed to convert URL to markdown: ${markdownResponse.statusText} - ${errorText}`)
+          if (jinaResponse.ok) {
+            markdown = await jinaResponse.text()
+            markdownSource = "Jina AI"
+            console.log("Markdown content length:", markdown.length)
+            controller.enqueue(encoder.encode(`Successfully converted URL to Markdown with Jina AI (${markdown.length} characters)\n\n`))
+          } else {
+            const errorText = await jinaResponse.text()
+            console.warn("Jina AI API error:", jinaResponse.status, errorText)
+            throw new Error(`Jina AI failed: ${jinaResponse.statusText} - ${errorText}`)
           }
-
-          markdown = await markdownResponse.text()
-          console.log("Markdown content length:", markdown.length)
+        } catch (jinaError) {
+          console.warn("Jina AI conversion failed, falling back to Markdowner:", jinaError)
+          controller.enqueue(encoder.encode(`Jina AI conversion failed, trying Markdowner API as fallback...\n`))
           
-          console.log("Converted URL to Markdown successfully")
-          controller.enqueue(encoder.encode(`Successfully converted URL to Markdown (${markdown.length} characters)\n\n`))
-        } catch (error) {
-          console.error("Error converting URL to Markdown:", error)
-          controller.enqueue(encoder.encode(`Error converting URL to Markdown: ${error}\n`))
-          controller.enqueue(encoder.encode("</processing>\n\n"))
-          throw error
+          // Fallback to Markdowner API
+          try {
+            console.log("Calling Markdowner API:", `https://md.dhr.wtf/?url=${encodeURIComponent(postUrl)}`)
+            const markdownerApiUrl = `https://md.dhr.wtf/?url=${encodeURIComponent(postUrl)}`
+            const markdownResponse = await fetch(markdownerApiUrl, {
+              headers: {
+                'Authorization': 'Bearer LWdIbnQ4UXhDc0dwX1BvLXNBSEVaLTI='
+              }
+            })
+
+            console.log("Received response from Markdowner API, status:", markdownResponse.status)
+            
+            if (!markdownResponse.ok) {
+              const errorText = await markdownResponse.text()
+              console.error("Markdowner API error:", markdownResponse.status, errorText)
+              throw new Error(`Failed to convert URL to markdown: ${markdownResponse.statusText} - ${errorText}`)
+            }
+
+            markdown = await markdownResponse.text()
+            markdownSource = "Markdowner"
+            console.log("Markdown content length:", markdown.length)
+            
+            console.log("Converted URL to Markdown successfully with Markdowner")
+            controller.enqueue(encoder.encode(`Successfully converted URL to Markdown with Markdowner (${markdown.length} characters)\n\n`))
+          } catch (markdownerError) {
+            console.error("Both Jina AI and Markdowner failed:", markdownerError)
+            controller.enqueue(encoder.encode(`Error converting URL to Markdown: Both Jina AI and Markdowner failed\n`))
+            controller.enqueue(encoder.encode(`Jina AI error: ${jinaError.message}\n`))
+            controller.enqueue(encoder.encode(`Markdowner error: ${markdownerError.message}\n`))
+            controller.enqueue(encoder.encode("</processing>\n\n"))
+            throw new Error(`Failed to convert URL to markdown with both services. Jina: ${jinaError.message}, Markdowner: ${markdownerError.message}`)
+          }
         }
 
         // Step 2: Extract domain data using the Domain Data API

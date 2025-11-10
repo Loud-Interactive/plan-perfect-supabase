@@ -87,7 +87,9 @@ export async function sendCentrWebhook(
   guid?: string
 ): Promise<{ success: boolean; error?: string; statusCode?: number; payload?: any }> {
   try {
-    // Use task_id as the GUID
+    // IMPORTANT: Centr uses task_id as the 'id' field in their articles
+    // Always use task_id as the GUID, not content_plan_outline_guid
+    // Priority: data.task_id > guid parameter > random UUID
     const eventGuid = data.task_id || guid || globalThis.crypto.randomUUID();
 
     // If there's HTML content, upload it to Supabase Storage and use the URL instead

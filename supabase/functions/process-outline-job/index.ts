@@ -696,11 +696,11 @@ Format your response as a JSON object with this structure:
           console.warn('Warning: Could not insert into content_plan_outlines_ai (non-critical):', aiError);
         }
 
-        // Step 13: Update job status to completed with heartbeat
+        // Step 13: Update job status to Completed (final status) with heartbeat
         await supabase
           .from('outline_generation_jobs')
           .update({
-            status: 'completed',
+            status: 'Completed',
             updated_at: new Date().toISOString(),
             heartbeat_at: new Date().toISOString()
           })

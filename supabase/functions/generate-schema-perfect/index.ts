@@ -645,7 +645,7 @@ async function streamSchemaGeneration(
         try {
           // Use Jina AI Reader API - prepend r.jina.ai/ to the URL
           const jinaApiUrl = `https://r.jina.ai/${postUrl}`
-          const jinaApiKey = Deno.env.get('JINA_API_KEY') || 'jina_b7c5a14c8b8f4e2082988e2bf82b9812TiwcBJjXjkk6ohrZCRejYBtvQarA'
+          const jinaApiKey = Deno.env.get('JINA_API_KEY') || 'jina_335b0361bef84b3694f1f8f23184b552j_S3s2fdN5mu5w3DXzq54O9DtCBe'
           
           const markdownResponse = await fetch(jinaApiUrl, {
             headers: {

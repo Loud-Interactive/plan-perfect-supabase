@@ -33,18 +33,88 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Validate job exists
-    const { data: job, error: jobError } = await supabase
+    // Check if job_id is a UUID (content_plan_outline_guid) or integer (job_id)
+    const isUUID = typeof job_id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(job_id);
+    let actualJobId = job_id;
+    let contentPlanOutlineGuid = null;
+
+    // If it's a UUID, look up the outline to get the job_id
+    if (isUUID) {
+      console.log(`Detected UUID (content_plan_outline_guid), looking up job_id...`);
+      contentPlanOutlineGuid = job_id;
+      
+      const { data: outlineDataArray, error: outlineError } = await supabase
+        .from('content_plan_outlines')
+        .select('job_id, guid')
+        .eq('guid', job_id)
+        .limit(1);
+
+      if (outlineError || !outlineDataArray || outlineDataArray.length === 0) {
+        console.warn(`Outline not found for GUID: ${job_id}. Will continue without job_id lookup.`);
+        // Continue without job_id - we'll try to get job info later
+      } else {
+        const outlineData = outlineDataArray[0];
+        
+        if (outlineData.job_id) {
+          actualJobId = outlineData.job_id;
+          console.log(`Found job_id: ${actualJobId} for GUID: ${job_id}`);
+        } else {
+          console.warn(`Outline found but no job_id associated with GUID: ${job_id}. Will continue without job_id.`);
+        }
+      }
+    }
+
+    // Try to get job - handle multiple or no rows gracefully
+    let job = null;
+    const { data: jobArray, error: jobError } = await supabase
       .from('outline_generation_jobs')
       .select('*')
-      .eq('id', job_id)
-      .single();
+      .eq('id', actualJobId)
+      .order('created_at', { ascending: false })
+      .limit(1);
 
-    if (jobError || !job) {
-      return new Response(
-        JSON.stringify({ error: `Job not found: ${jobError?.message || 'Unknown error'}` }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (jobArray && jobArray.length > 0) {
+      job = jobArray[0];
+      console.log(`Found job record for job_id: ${actualJobId}`);
+    } else {
+      console.warn(`No job found in outline_generation_jobs for job_id: ${actualJobId}. Will try to get job info from content_plan_outlines.`);
+      
+      // Try to get job info from content_plan_outlines if we have a GUID
+      if (contentPlanOutlineGuid) {
+        const { data: outlineDataArray, error: outlineError } = await supabase
+          .from('content_plan_outlines')
+          .select('title, keyword, content_plan_keyword, domain')
+          .eq('guid', contentPlanOutlineGuid)
+          .limit(1);
+        
+        if (outlineDataArray && outlineDataArray.length > 0 && !outlineError) {
+          const outlineData = outlineDataArray[0];
+          // Create a mock job object from outline data
+          job = {
+            id: actualJobId,
+            post_title: outlineData.title || '',
+            post_keyword: outlineData.keyword || '',
+            content_plan_keyword: outlineData.content_plan_keyword || '',
+            domain: outlineData.domain || '',
+            status: 'pending'
+          };
+          console.log(`Using job info from content_plan_outlines for GUID: ${contentPlanOutlineGuid}`);
+        }
+      }
+    }
+
+    // If still no job, we can't proceed - but let's try to continue anyway with minimal info
+    if (!job) {
+      console.warn(`No job found and couldn't get info from outline. Continuing with minimal job info.`);
+      // Create a minimal job object to allow processing to continue
+      job = {
+        id: actualJobId,
+        post_title: 'Untitled',
+        post_keyword: '',
+        content_plan_keyword: '',
+        domain: '',
+        status: 'pending'
+      };
     }
 
     // Start background processing
@@ -52,20 +122,36 @@ serve(async (req) => {
       try {
         await new Promise(resolve => setTimeout(resolve, 200));
 
-        console.log(`Beginning fast background regeneration for job_id: ${job_id}`);
+        const outlineGuidForStatus = contentPlanOutlineGuid || actualJobId;
+        console.log(`Beginning fast background regeneration for job_id: ${actualJobId}, outline_guid: ${outlineGuidForStatus}`);
 
-        await supabase
-          .from('outline_generation_jobs')
-          .update({
-            status: 'fast_regenerating',
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', job_id);
+        // Reset retry count when starting a new regeneration attempt (handle gracefully if columns don't exist)
+        try {
+          await supabase
+            .from('outline_generation_jobs')
+            .update({
+              status: 'fast_regenerating',
+              fast_regeneration_retry_count: 0, // Reset retry count on new attempt
+              fast_regeneration_retry_at: null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', actualJobId);
+        } catch (resetError) {
+          // If retry columns don't exist, just update status
+          console.warn('Could not reset retry columns (may not exist yet), updating status only:', resetError);
+          await supabase
+            .from('outline_generation_jobs')
+            .update({
+              status: 'fast_regenerating',
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', actualJobId);
+        }
 
         await supabase
           .from('content_plan_outline_statuses')
           .insert({
-            outline_guid: job_id,
+            outline_guid: outlineGuidForStatus,
             status: 'fast_outline_regeneration_started'
           });
 
@@ -73,7 +159,7 @@ serve(async (req) => {
         const { data: originalOutlineDataArray, error: originalOutlineError } = await supabase
           .from('content_plan_outlines_ai')
           .select('*')
-          .eq('job_id', job_id)
+          .eq('job_id', actualJobId)
           .order('created_at', { ascending: false })
           .limit(1);
 
@@ -88,14 +174,14 @@ serve(async (req) => {
         const hasOriginalOutline = originalOutlineData !== null;
         
         if (!hasOriginalOutline) {
-          console.log(`No previous outline found for job_id ${job_id}. Will generate new outline from research results.`);
+          console.log(`No previous outline found for job_id ${actualJobId}. Will generate new outline from research results.`);
         }
 
         // Get search results
         const { data: searchResults, error: searchResultsError } = await supabase
           .from('outline_search_results')
           .select('*')
-          .eq('job_id', job_id);
+          .eq('job_id', actualJobId);
 
         if (searchResultsError) {
           console.error(`Error fetching search results: ${searchResultsError.message}`);
@@ -106,13 +192,13 @@ serve(async (req) => {
         // If no search results, log it but continue with generation
         const hasSearchResults = searchResults && searchResults.length > 0;
         if (!hasSearchResults) {
-          console.log(`No search results found for job_id ${job_id}. Will generate outline using job information and brand profile.`);
+          console.log(`No search results found for job_id ${actualJobId}. Will generate outline using job information and brand profile.`);
         }
 
         await supabase
           .from('content_plan_outline_statuses')
           .insert({
-            outline_guid: job_id,
+            outline_guid: outlineGuidForStatus,
             status: 'preparing_research_context'
           });
 
@@ -305,7 +391,7 @@ IMPORTANT: Return ONLY the JSON object. No markdown code blocks, no commentary, 
         await supabase
           .from('content_plan_outline_statuses')
           .insert({
-            outline_guid: job_id,
+            outline_guid: outlineGuidForStatus,
             status: 'generating_improved_outline_with_groq'
           });
 
@@ -313,27 +399,27 @@ IMPORTANT: Return ONLY the JSON object. No markdown code blocks, no commentary, 
           apiKey: Deno.env.get('GROQ_API_KEY') || '',
         });
 
-        // Retry logic with exponential backoff
+        // Retry logic with exponential backoff for Groq API calls
         let fullResponse = '';
-        const maxRetries = 3;
-        let attempt = 0;
-        let lastError: any = null;
+        const maxGroqRetries = 5; // Increased from 3 to 5
+        let groqAttempt = 0;
+        let lastGroqError: any = null;
 
-        while (attempt < maxRetries) {
+        while (groqAttempt < maxGroqRetries) {
           try {
-            attempt++;
-            console.log(`Groq API call attempt ${attempt}/${maxRetries}...`);
+            groqAttempt++;
+            console.log(`Groq API call attempt ${groqAttempt}/${maxGroqRetries}...`);
 
             await supabase
               .from('content_plan_outline_statuses')
               .insert({
-                outline_guid: job_id,
-                status: `groq_regeneration_attempt_${attempt}`
+                outline_guid: outlineGuidForStatus,
+                status: `groq_regeneration_attempt_${groqAttempt}`
               });
 
             let attemptPrompt = regenerationPrompt;
-            if (attempt > 1) {
-              attemptPrompt = `${regenerationPrompt}\n\nATTEMPT ${attempt}: You previously failed to return valid JSON. This time you MUST return ONLY valid JSON with NO explanatory text. Start with { and end with }.`;
+            if (groqAttempt > 1) {
+              attemptPrompt = `${regenerationPrompt}\n\nATTEMPT ${groqAttempt}: You previously failed to return valid JSON. This time you MUST return ONLY valid JSON with NO explanatory text. Start with { and end with }.`;
             }
 
             const stream = await groq.chat.completions.create({
@@ -383,25 +469,26 @@ IMPORTANT: Return ONLY the JSON object. No markdown code blocks, no commentary, 
             }
 
           } catch (error) {
-            lastError = error;
-            console.error(`Attempt ${attempt} failed:`, error.message);
+            lastGroqError = error;
+            console.error(`Groq API attempt ${groqAttempt} failed:`, error.message);
 
-            if (attempt < maxRetries) {
-              const backoffMs = Math.min(1000 * Math.pow(2, attempt), 10000);
-              console.log(`Retrying in ${backoffMs}ms...`);
+            if (groqAttempt < maxGroqRetries) {
+              // Exponential backoff: 1s, 2s, 4s, 8s, 16s (capped at 16s)
+              const backoffMs = Math.min(1000 * Math.pow(2, groqAttempt - 1), 16000);
+              console.log(`Retrying Groq API call in ${backoffMs}ms (exponential backoff)...`);
               await new Promise(resolve => setTimeout(resolve, backoffMs));
             }
           }
         }
 
         if (!fullResponse || fullResponse.length < 100) {
-          throw new Error(`Failed after ${maxRetries} attempts. Last error: ${lastError?.message || 'Unknown error'}`);
+          throw new Error(`Groq API failed after ${maxGroqRetries} attempts. Last error: ${lastGroqError?.message || 'Unknown error'}`);
         }
 
         await supabase
           .from('content_plan_outline_statuses')
           .insert({
-            outline_guid: job_id,
+            outline_guid: outlineGuidForStatus,
             status: 'parsing_improved_outline_response'
           });
 
@@ -460,7 +547,7 @@ IMPORTANT: Return ONLY the JSON object. No markdown code blocks, no commentary, 
         await supabase
           .from('content_plan_outline_statuses')
           .insert({
-            outline_guid: job_id,
+            outline_guid: outlineGuidForStatus,
             status: 'saving_improved_outline'
           });
 
@@ -468,33 +555,34 @@ IMPORTANT: Return ONLY the JSON object. No markdown code blocks, no commentary, 
         await supabase
           .from('content_plan_outlines_ai')
           .insert({
-            job_id,
+            job_id: actualJobId,
             outline: outlineJson
           });
 
-        // Update content_plan_outlines
+        // Update content_plan_outlines (use GUID if available, otherwise use job_id)
+        const updateGuid = contentPlanOutlineGuid || actualJobId;
         await supabase
           .from('content_plan_outlines')
           .update({
             outline: JSON.stringify(outlineJson),
-            status: 'regenerated'
+            status: 'Completed'
           })
-          .eq('guid', job_id);
+          .eq('guid', updateGuid);
 
-        // Update job status
+        // Update job status to Completed (final status)
         await supabase
           .from('outline_generation_jobs')
           .update({
-            status: 'regenerated',
+            status: 'Completed',
             updated_at: new Date().toISOString(),
             heartbeat_at: new Date().toISOString()
           })
-          .eq('id', job_id);
+          .eq('id', actualJobId);
 
         await supabase
           .from('content_plan_outline_statuses')
           .insert({
-            outline_guid: job_id,
+            outline_guid: outlineGuidForStatus,
             status: 'fast_regeneration_completed'
           });
 
@@ -505,21 +593,126 @@ IMPORTANT: Return ONLY the JSON object. No markdown code blocks, no commentary, 
 
         try {
           const supabase = createClient(supabaseUrl, supabaseServiceKey);
-          await supabase
-            .from('outline_generation_jobs')
-            .update({
-              status: 'fast_regeneration_failed',
-              updated_at: new Date().toISOString(),
-              heartbeat_at: new Date().toISOString()
-            })
-            .eq('id', job_id);
+          const outlineGuidForStatus = contentPlanOutlineGuid || actualJobId;
+          
+          // Get current retry count from job (handle gracefully if column doesn't exist)
+          let currentRetryCount = 0;
+          try {
+            const { data: currentJob } = await supabase
+              .from('outline_generation_jobs')
+              .select('fast_regeneration_retry_count')
+              .eq('id', actualJobId)
+              .single();
+            
+            currentRetryCount = currentJob?.fast_regeneration_retry_count || 0;
+          } catch (selectError) {
+            // Column might not exist yet - use 0 as default
+            console.warn('Could not read retry count (column may not exist):', selectError);
+            currentRetryCount = 0;
+          }
+          const maxRegenerationRetries = 3;
+          
+          if (currentRetryCount < maxRegenerationRetries) {
+            // Retry the regeneration
+            const newRetryCount = currentRetryCount + 1;
+            const retryDelaySeconds = Math.min(60 * Math.pow(2, currentRetryCount), 300); // Exponential backoff: 60s, 120s, 240s (max 5min)
+            
+            console.log(`Fast regeneration failed (attempt ${currentRetryCount + 1}/${maxRegenerationRetries}). Scheduling retry in ${retryDelaySeconds}s...`);
+            
+            // Update job status with retry info (handle gracefully if columns don't exist)
+            try {
+              await supabase
+                .from('outline_generation_jobs')
+                .update({
+                  status: 'fast_regeneration_failed',
+                  fast_regeneration_retry_count: newRetryCount,
+                  fast_regeneration_retry_at: new Date(Date.now() + retryDelaySeconds * 1000).toISOString(),
+                  updated_at: new Date().toISOString(),
+                  heartbeat_at: new Date().toISOString()
+                })
+                .eq('id', actualJobId);
+            } catch (updateError) {
+              // If columns don't exist, just update status
+              console.warn('Could not update retry columns (may not exist yet), updating status only:', updateError);
+              await supabase
+                .from('outline_generation_jobs')
+                .update({
+                  status: 'fast_regeneration_failed',
+                  updated_at: new Date().toISOString(),
+                  heartbeat_at: new Date().toISOString()
+                })
+                .eq('id', actualJobId);
+            }
 
-          await supabase
-            .from('content_plan_outline_statuses')
-            .insert({
-              outline_guid: job_id,
-              status: `fast_regeneration_error: ${backgroundError.message.substring(0, 100)}`
-            });
+            await supabase
+              .from('content_plan_outline_statuses')
+              .insert({
+                outline_guid: outlineGuidForStatus,
+                status: `fast_regeneration_failed_retry_${newRetryCount}_of_${maxRegenerationRetries}: ${backgroundError.message.substring(0, 100)}`
+              });
+            
+            // Schedule retry by calling the function again after delay
+            setTimeout(async () => {
+              try {
+                console.log(`Retrying fast regeneration (attempt ${newRetryCount}/${maxRegenerationRetries})...`);
+                const retryResponse = await fetch(`${supabaseUrl}/functions/v1/fast-regenerate-outline`, {
+                  method: 'POST',
+                  headers: {
+                    'Authorization': `Bearer ${supabaseServiceKey}`,
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    job_id: actualJobId,
+                    content_plan_outline_guid: contentPlanOutlineGuid
+                  })
+                });
+                
+                if (!retryResponse.ok) {
+                  const errorText = await retryResponse.text();
+                  console.error(`Retry attempt ${newRetryCount} failed to trigger:`, errorText);
+                } else {
+                  console.log(`Retry attempt ${newRetryCount} triggered successfully`);
+                }
+              } catch (retryError) {
+                console.error(`Error triggering retry attempt ${newRetryCount}:`, retryError);
+              }
+            }, retryDelaySeconds * 1000);
+            
+          } else {
+            // Max retries reached - mark as permanently failed
+            console.error(`Fast regeneration failed after ${maxRegenerationRetries} attempts. Marking as permanently failed.`);
+            
+            // Update job status (handle gracefully if retry columns don't exist)
+            try {
+              await supabase
+                .from('outline_generation_jobs')
+                .update({
+                  status: 'fast_regeneration_failed',
+                  fast_regeneration_retry_count: maxRegenerationRetries,
+                  updated_at: new Date().toISOString(),
+                  heartbeat_at: new Date().toISOString()
+                })
+                .eq('id', actualJobId);
+            } catch (updateError) {
+              // If columns don't exist, just update status
+              console.warn('Could not update retry columns (may not exist yet), updating status only:', updateError);
+              await supabase
+                .from('outline_generation_jobs')
+                .update({
+                  status: 'fast_regeneration_failed',
+                  updated_at: new Date().toISOString(),
+                  heartbeat_at: new Date().toISOString()
+                })
+                .eq('id', actualJobId);
+            }
+
+            await supabase
+              .from('content_plan_outline_statuses')
+              .insert({
+                outline_guid: outlineGuidForStatus,
+                status: `fast_regeneration_failed_max_retries_exceeded: ${backgroundError.message.substring(0, 100)}`
+              });
+          }
         } catch (updateError) {
           console.error('Error updating job status:', updateError);
         }
@@ -543,13 +736,29 @@ IMPORTANT: Return ONLY the JSON object. No markdown code blocks, no commentary, 
         const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
         const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+        // Try to determine actual job_id if job_id is a UUID
+        const isUUID = typeof job_id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(job_id);
+        let actualJobIdForError = job_id;
+        
+        if (isUUID) {
+          const { data: outlineData } = await supabase
+            .from('content_plan_outlines')
+            .select('job_id')
+            .eq('guid', job_id)
+            .single();
+          
+          if (outlineData?.job_id) {
+            actualJobIdForError = outlineData.job_id;
+          }
+        }
+
         await supabase
           .from('outline_generation_jobs')
           .update({
             status: 'fast_regeneration_failed',
             updated_at: new Date().toISOString()
           })
-          .eq('id', job_id);
+          .eq('id', actualJobIdForError);
       } catch (updateError) {
         console.error('Error updating job status:', updateError);
       }

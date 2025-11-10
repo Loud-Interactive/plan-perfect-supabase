@@ -83,17 +83,18 @@ async function updateTaskStatus(
 }
 /**
  * Generate Callout HTML
- */ function generateCallout(callout, side) {
-  if (!callout.text) return '';
+ */ function generateCallout(calloutText, position, ctaUrl, ctaText) {
+  if (!calloutText) return '';
+  const side = position === 'left' ? 'left' : 'right';
   return `<!-- Start: Callout ${side === 'left' ? 'Left' : 'Right'}  -->
 <div class="callout callout_${side}">
   <p class="callout_text">
-    ${callout.text}
+    ${calloutText}
   </p>
   <!-- Start: Callout ${side === 'left' ? 'Left' : 'Right'} CTA -->
   <div class="callout_${side}_cta_button">
-    <a class="callout_${side}_cta_dest_url" href="${callout.cta_url}">
-      <span class="callout_${side}_cta_anchor_text"> ${callout.cta_text} </span>
+    <a class="callout_${side}_cta_dest_url" href="${ctaUrl || '#'}">
+      <span class="callout_${side}_cta_anchor_text"> ${ctaText || 'Learn More'} </span>
       <svg width="10" height="8" viewBox="0 0 10 8" fill="none" xmlns="http://www.w3.org/2000/svg">
         <path
           d="M1.07178 7.27418L4.34559 4.00037L1.07178 0.726562M5.65511 7.27418L8.92892 4.00037L5.65511 0.726562"
@@ -110,31 +111,34 @@ function convertReferencesToLinks(content) {
 }
 /**
  * Generate Body Content HTML
- */ function generateBodyContent(article) {
+ */ function generateBodyContent(article, pairsData) {
   let html = '';
-  let leftCalloutUsed = false;
-  let rightCalloutUsed = false;
+  
+  // Get CTA preferences from pairsData with defaults
+  const leftCtaUrl = pairsData?.callout_left_cta_dest_url || '#';
+  const leftCtaText = pairsData?.callout_left_cta_anchor_text || 'Learn More';
+  const rightCtaUrl = pairsData?.callout_right_cta_dest_url || '#';
+  const rightCtaText = pairsData?.callout_right_cta_anchor_text || 'Learn More';
+  
   article.sections.forEach((section, sectionIdx)=>{
     const sectionId = `Section_${sectionIdx + 1}`;
     html += `\n<h2 id="${sectionId}">
   ${section.heading}
 </h2>\n`;
+    
+    // Insert callout right after H2 heading if section has one
+    if (section.callout && section.callout.text) {
+      const ctaUrl = section.callout.position === 'left' ? leftCtaUrl : rightCtaUrl;
+      const ctaText = section.callout.position === 'left' ? leftCtaText : rightCtaText;
+      html += '\n' + generateCallout(section.callout.text, section.callout.position, ctaUrl, ctaText) + '\n\n';
+    }
+    
     section.subsections.forEach((subsection, subIdx)=>{
       const subsectionId = `${sectionId}_SubSection_${subIdx + 1}`;
       const subsectionTitle = subsection.heading || subsection.title || '';
       // Only render H3 if there's a title
       if (subsectionTitle) {
         html += `<h3 id="${subsectionId}">${subsectionTitle}</h3>\n`;
-      }
-      // Insert left callout after first subsection of second section
-      if (sectionIdx === 1 && subIdx === 0 && !leftCalloutUsed && article.callouts?.left?.text) {
-        html += '\n' + generateCallout(article.callouts.left, 'left') + '\n\n';
-        leftCalloutUsed = true;
-      }
-      // Insert right callout after first subsection of third section
-      if (sectionIdx === 2 && subIdx === 0 && !rightCalloutUsed && article.callouts?.right?.text) {
-        html += '\n' + generateCallout(article.callouts.right, 'right') + '\n\n';
-        rightCalloutUsed = true;
       }
       // Split content into paragraphs (rough split by sentences)
       const sentences = subsection.content.match(/[^.!?]+[.!?]+/g) || [
@@ -284,7 +288,7 @@ function convertReferencesToLinks(content) {
   // Generate all sections
   const toc = generateTOC(article);
   const summary = generateSummary(article.summary);
-  const bodyContent = generateBodyContent(article);
+  const bodyContent = generateBodyContent(article, pairsData);
   const keyTakeaways = generateKeyTakeaways(article.summary.key_points);
   const references = generateReferences(article.references);
   const readTime = calculateReadTime(article.metadata.word_count);
@@ -311,14 +315,37 @@ serve(async (req)=>{
       headers: corsHeaders
     });
   }
+  // Parse request body once and store for error handling
+  let task_id: string | null = null;
+  let content_plan_outline_guid: string | null = null;
+  let rich_json: any = null;
+  
   try {
+    try {
+      const requestBody = await req.json();
+      task_id = requestBody.task_id || null;
+      content_plan_outline_guid = requestBody.content_plan_outline_guid || null;
+      rich_json = requestBody.rich_json || null;
+    } catch (parseError) {
+      console.error('Error parsing request body:', parseError);
+      return new Response(JSON.stringify({
+        error: 'Invalid request body',
+        details: parseError.message
+      }), {
+        status: 400,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+    
     const supabaseClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', {
       auth: {
         persistSession: false,
         autoRefreshToken: false
       }
     });
-    const { task_id, content_plan_outline_guid, rich_json } = await req.json();
     
     // Update status: starting HTML conversion
     await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'converting_json_to_html');
@@ -349,16 +376,20 @@ serve(async (req)=>{
       } else if (content_plan_outline_guid) {
         query = query.eq('content_plan_outline_guid', content_plan_outline_guid);
       }
-      const { data: taskData, error: taskError } = await query.single();
-      if (taskError) {
-        console.error('Error fetching task:', taskError);
-      } else {
+      const { data: taskDataArray, error: taskError } = await query.order('created_at', { ascending: false }).limit(1);
+      
+      if (taskDataArray && taskDataArray.length > 0) {
+        const taskData = taskDataArray[0];
         clientDomain = taskData?.client_domain || null;
         heroImageUrl = taskData?.hero_image_url || null;
         console.log(`Found client_domain: ${clientDomain}`);
         if (heroImageUrl) {
           console.log(`Found hero_image_url: ${heroImageUrl}`);
         }
+      } else if (taskError) {
+        console.warn(`Warning: Error fetching task (will continue without client_domain/hero_image): ${taskError.message}`);
+      } else {
+        console.warn(`Warning: No task found for ${task_id ? `task_id: ${task_id}` : `content_plan_outline_guid: ${content_plan_outline_guid}`} (will continue without client_domain/hero_image)`);
       }
       
       // Update status: fetching JSON
@@ -366,31 +397,63 @@ serve(async (req)=>{
       
       // Call the markdown-to-rich-json function to get the JSON
       const markdownToJsonUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/markdown-to-rich-json`;
-      const markdownResponse = await fetch(markdownToJsonUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
-        },
-        body: JSON.stringify({
-          task_id,
-          content_plan_outline_guid
-        })
-      });
-      if (!markdownResponse.ok) {
-        const errorData = await markdownResponse.json();
+      
+      // Add timeout to prevent hanging (5 minutes max)
+      const timeoutMs = 5 * 60 * 1000; // 5 minutes
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      
+      try {
+        const markdownResponse = await fetch(markdownToJsonUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+          },
+          body: JSON.stringify({
+            task_id,
+            content_plan_outline_guid
+          }),
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!markdownResponse.ok) {
+          let errorData;
+          try {
+            errorData = await markdownResponse.json();
+          } catch {
+            errorData = { message: `HTTP ${markdownResponse.status}: ${markdownResponse.statusText}` };
+          }
+          await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'html_generation_failed');
+          return new Response(JSON.stringify({
+            error: 'Failed to convert markdown to rich JSON',
+            details: errorData
+          }), {
+            status: markdownResponse.status,
+            headers: {
+              ...corsHeaders,
+              'Content-Type': 'application/json'
+            }
+          });
+        }
+        articleJson = await markdownResponse.json();
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        console.error('Error calling markdown-to-rich-json:', fetchError);
+        await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'html_generation_failed');
         return new Response(JSON.stringify({
-          error: 'Failed to convert markdown to rich JSON',
-          details: errorData
+          error: 'Failed to call markdown-to-rich-json function',
+          details: fetchError.message || 'Request timeout or network error'
         }), {
-          status: markdownResponse.status,
+          status: 500,
           headers: {
             ...corsHeaders,
             'Content-Type': 'application/json'
           }
         });
       }
-      articleJson = await markdownResponse.json();
     }
     
     // Update status: fetching pairs data
@@ -483,15 +546,14 @@ serve(async (req)=>{
         guidToUse = task_id;
       } else if (content_plan_outline_guid && !rich_json) {
         // Get task_id from content_plan_outline_guid if we don't have task_id
-        const { data: taskData } = await supabaseClient
+        const { data: taskDataArray } = await supabaseClient
           .from('tasks')
           .select('task_id')
           .eq('content_plan_outline_guid', content_plan_outline_guid)
           .order('created_at', { ascending: false })
-          .limit(1)
-          .single();
-        if (taskData?.task_id) {
-          guidToUse = taskData.task_id;
+          .limit(1);
+        if (taskDataArray && taskDataArray.length > 0 && taskDataArray[0]?.task_id) {
+          guidToUse = taskDataArray[0].task_id;
         }
       }
       
@@ -589,6 +651,7 @@ serve(async (req)=>{
       });
     } catch (error) {
       console.error('Error rendering HTML:', error);
+      await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'html_generation_failed');
       return new Response(JSON.stringify({
         error: 'Failed to render HTML',
         details: error.message
@@ -602,6 +665,18 @@ serve(async (req)=>{
     }
   } catch (error) {
     console.error('Error in render-rich-json-to-html function:', error);
+    // Try to update status even if we're in the outer catch block
+    try {
+      const supabaseClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', {
+        auth: {
+          persistSession: false,
+          autoRefreshToken: false
+        }
+      });
+      await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'html_generation_failed');
+    } catch (statusError) {
+      console.error('Failed to update status on error:', statusError);
+    }
     return new Response(JSON.stringify({
       error: error.message || 'Internal server error'
     }), {
