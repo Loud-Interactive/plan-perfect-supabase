@@ -475,6 +475,10 @@ serve(async (req)=>{
           console.log(`  - HTML_Post_Template: ${pairsData?.HTML_Post_Template ? 'YES' : 'NO'}`);
           console.log(`  - post_style_tag_main: ${pairsData?.post_style_tag_main ? 'YES' : 'NO'}`);
           console.log(`  - synopsis: ${pairsData?.synopsis ? pairsData.synopsis.length + ' chars' : 'NO'}`);
+          console.log(`  - callout_left_cta_dest_url: ${pairsData?.callout_left_cta_dest_url || 'NOT SET (using default)'}`);
+          console.log(`  - callout_left_cta_anchor_text: ${pairsData?.callout_left_cta_anchor_text || 'NOT SET (using default)'}`);
+          console.log(`  - callout_right_cta_dest_url: ${pairsData?.callout_right_cta_dest_url || 'NOT SET (using default)'}`);
+          console.log(`  - callout_right_cta_anchor_text: ${pairsData?.callout_right_cta_anchor_text || 'NOT SET (using default)'}`);
         } else {
           console.log(`Failed to fetch pairs data:`, error);
         }
