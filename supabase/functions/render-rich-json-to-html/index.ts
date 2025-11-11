@@ -287,10 +287,12 @@ function convertReferencesToLinks(content) {
   const socialLinks = generateSocialLinks(pairsData);
   const aboutCompanyText = pairsData?.about_company || pairsData?.synopsis || 'Learn more about our company and what we do.';
   const aboutCompanyTitle = pairsData?.about_company_title || 'About Us';
+  const authorName = pairsData?.author_name || 'Author';
+  const authorUrl = pairsData?.author_url || '#';
   // Default hero image if none provided
   const leadImageUrl = heroImageUrl || 'https://via.placeholder.com/1200x630';
   // Replace all {{PLACEHOLDER}} patterns in new template format
-  let html = template.replace(/{{TITLE_TAG}}/g, article.title).replace(/{{SUMMARY_SECTION}}/g, summary).replace(/{{META_DESCRIPTION}}/g, article.summary.content.substring(0, 160)).replace(/{{JSON_LD}}/g, jsonLD).replace(/{{HEADLINE}}/g, article.title).replace(/{{BYLINE_URL}}/g, '#').replace(/{{BYLINE_NAME}}/g, 'Author').replace(/{{DATE}}/g, currentDate).replace(/{{READ_TIME}}/g, readTime).replace(/{{LEAD_IMAGE_URL}}/g, leadImageUrl).replace(/{{LEAD_IMAGE_ALT}}/g, article.title).replace(/{{ABOUT_COMPANY_TEXT}}/g, aboutCompanyText).replace(/{{ABOUT_COMPANY_TITLE}}/g, aboutCompanyTitle).replace(/{{SOCIAL_LINKS}}/g, socialLinks).replace(/{{TOC_SECTION}}/g, toc).replace(/{{BODY_CONTENT}}/g, bodyContent).replace(/{{KEY_TAKEAWAYS}}/g, keyTakeaways).replace(/{{REFERENCES}}/g, references);
+  let html = template.replace(/{{TITLE_TAG}}/g, article.title).replace(/{{SUMMARY_SECTION}}/g, summary).replace(/{{META_DESCRIPTION}}/g, article.summary.content.substring(0, 160)).replace(/{{JSON_LD}}/g, jsonLD).replace(/{{HEADLINE}}/g, article.title).replace(/{{BYLINE_URL}}/g, authorUrl).replace(/{{BYLINE_NAME}}/g, authorName).replace(/{{DATE}}/g, currentDate).replace(/{{READ_TIME}}/g, readTime).replace(/{{LEAD_IMAGE_URL}}/g, leadImageUrl).replace(/{{LEAD_IMAGE_ALT}}/g, article.title).replace(/{{ABOUT_COMPANY_TEXT}}/g, aboutCompanyText).replace(/{{ABOUT_COMPANY_TITLE}}/g, aboutCompanyTitle).replace(/{{SOCIAL_LINKS}}/g, socialLinks).replace(/{{TOC_SECTION}}/g, toc).replace(/{{BODY_CONTENT}}/g, bodyContent).replace(/{{KEY_TAKEAWAYS}}/g, keyTakeaways).replace(/{{REFERENCES}}/g, references);
   // Inject CSS (including custom styles)
   html = injectCSS(html, domain, pairsData, customStyles);
   return html;
