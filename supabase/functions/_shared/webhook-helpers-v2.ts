@@ -137,6 +137,12 @@ export async function sendCentrWebhook(
     }
 
     // Prepare Centr-formatted payload - guid at top level
+    const slug = data.slug || generateSlug(data.title || '');
+    
+    // Generate live_post_url if not provided: https://centr.com/blog/show/{task_id}/{slug}
+    const livePostUrl = data.live_post_url || 
+      (eventGuid && slug ? `https://centr.com/blog/show/${eventGuid}/${slug}` : undefined);
+    
     const payloadWithoutSignature = {
       guid: eventGuid,  // GUID at the top
       event,
@@ -144,7 +150,7 @@ export async function sendCentrWebhook(
       data: {
         status: data.status || 'Unknown',
         title: data.title || '',
-        slug: data.slug || generateSlug(data.title || ''),
+        slug: slug,
         client_domain: data.client_domain || data.domain || '',
         html_link: contentUrl,  // Use storage URL instead of inline HTML
         google_doc_link: data.google_doc_link,
@@ -153,7 +159,7 @@ export async function sendCentrWebhook(
         meta_description: data.meta_description,
         hero_image_url: data.hero_image_url,
         error: data.error,
-        live_post_url: data.live_post_url
+        live_post_url: livePostUrl
       }
     };
 
