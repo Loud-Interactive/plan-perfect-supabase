@@ -140,8 +140,21 @@ export async function sendCentrWebhook(
     const slug = data.slug || generateSlug(data.title || '');
     
     // Generate live_post_url if not provided: https://centr.com/blog/show/{task_id}/{slug}
-    const livePostUrl = data.live_post_url || 
-      (eventGuid && slug ? `https://centr.com/blog/show/${eventGuid}/${slug}` : undefined);
+    // Always generate if we have both eventGuid and slug, unless a valid live_post_url is already provided
+    const hasValidLivePostUrl = data.live_post_url && 
+      typeof data.live_post_url === 'string' && 
+      data.live_post_url.trim() !== '';
+    const hasValidSlug = slug && typeof slug === 'string' && slug.trim() !== '';
+    const livePostUrl = hasValidLivePostUrl
+      ? data.live_post_url 
+      : (eventGuid && hasValidSlug ? `https://centr.com/blog/show/${eventGuid}/${slug}` : undefined);
+    
+    // Debug logging for live_post_url generation
+    if (!livePostUrl) {
+      console.log(`[sendCentrWebhook] Warning: Could not generate live_post_url. eventGuid: ${eventGuid}, slug: ${slug}, hasValidSlug: ${hasValidSlug}, provided live_post_url: ${data.live_post_url}`);
+    } else {
+      console.log(`[sendCentrWebhook] Generated live_post_url: ${livePostUrl}`);
+    }
     
     const payloadWithoutSignature = {
       guid: eventGuid,  // GUID at the top

@@ -4,29 +4,19 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
 };
-
 /**
  * Helper function to update task status
- */
-async function updateTaskStatus(
-  supabaseClient: any,
-  taskId: string | null,
-  outlineGuid: string | null,
-  status: string
-): Promise<void> {
+ */ async function updateTaskStatus(supabaseClient, taskId, outlineGuid, status) {
   if (!taskId && !outlineGuid) return;
-  
   try {
     if (taskId) {
-      await supabaseClient
-        .from('tasks')
-        .update({ status })
-        .eq('task_id', taskId);
+      await supabaseClient.from('tasks').update({
+        status
+      }).eq('task_id', taskId);
     } else if (outlineGuid) {
-      await supabaseClient
-        .from('tasks')
-        .update({ status })
-        .eq('content_plan_outline_guid', outlineGuid);
+      await supabaseClient.from('tasks').update({
+        status
+      }).eq('content_plan_outline_guid', outlineGuid);
     }
     console.log(`[Status] Updated to: ${status}`);
   } catch (error) {
@@ -113,26 +103,22 @@ function convertReferencesToLinks(content) {
  * Generate Body Content HTML
  */ function generateBodyContent(article, pairsData) {
   let html = '';
-  
   // Get CTA preferences from pairsData with defaults
   const leftCtaUrl = pairsData?.callout_left_cta_dest_url || '#';
   const leftCtaText = pairsData?.callout_left_cta_anchor_text || 'Learn More';
   const rightCtaUrl = pairsData?.callout_right_cta_dest_url || '#';
   const rightCtaText = pairsData?.callout_right_cta_anchor_text || 'Learn More';
-  
   article.sections.forEach((section, sectionIdx)=>{
     const sectionId = `Section_${sectionIdx + 1}`;
     html += `\n<h2 id="${sectionId}">
   ${section.heading}
 </h2>\n`;
-    
     // Insert callout right after H2 heading if section has one
     if (section.callout && section.callout.text) {
       const ctaUrl = section.callout.position === 'left' ? leftCtaUrl : rightCtaUrl;
       const ctaText = section.callout.position === 'left' ? leftCtaText : rightCtaText;
       html += '\n' + generateCallout(section.callout.text, section.callout.position, ctaUrl, ctaText) + '\n\n';
     }
-    
     section.subsections.forEach((subsection, subIdx)=>{
       const subsectionId = `${sectionId}_SubSection_${subIdx + 1}`;
       const subsectionTitle = subsection.heading || subsection.title || '';
@@ -300,10 +286,11 @@ function convertReferencesToLinks(content) {
   const jsonLD = generateJsonLD(article, domain, heroImageUrl);
   const socialLinks = generateSocialLinks(pairsData);
   const aboutCompanyText = pairsData?.about_company || pairsData?.synopsis || 'Learn more about our company and what we do.';
+  const aboutCompanyTitle = pairsData?.about_company_title || 'About Us';
   // Default hero image if none provided
   const leadImageUrl = heroImageUrl || 'https://via.placeholder.com/1200x630';
   // Replace all {{PLACEHOLDER}} patterns in new template format
-  let html = template.replace(/{{TITLE_TAG}}/g, article.title).replace(/{{SUMMARY_SECTION}}/g, summary).replace(/{{META_DESCRIPTION}}/g, article.summary.content.substring(0, 160)).replace(/{{JSON_LD}}/g, jsonLD).replace(/{{HEADLINE}}/g, article.title).replace(/{{BYLINE_URL}}/g, '#').replace(/{{BYLINE_NAME}}/g, 'Author').replace(/{{DATE}}/g, currentDate).replace(/{{READ_TIME}}/g, readTime).replace(/{{LEAD_IMAGE_URL}}/g, leadImageUrl).replace(/{{LEAD_IMAGE_ALT}}/g, article.title).replace(/{{ABOUT_COMPANY_TEXT}}/g, aboutCompanyText).replace(/{{SOCIAL_LINKS}}/g, socialLinks).replace(/{{TOC_SECTION}}/g, toc).replace(/{{BODY_CONTENT}}/g, bodyContent).replace(/{{KEY_TAKEAWAYS}}/g, keyTakeaways).replace(/{{REFERENCES}}/g, references);
+  let html = template.replace(/{{TITLE_TAG}}/g, article.title).replace(/{{SUMMARY_SECTION}}/g, summary).replace(/{{META_DESCRIPTION}}/g, article.summary.content.substring(0, 160)).replace(/{{JSON_LD}}/g, jsonLD).replace(/{{HEADLINE}}/g, article.title).replace(/{{BYLINE_URL}}/g, '#').replace(/{{BYLINE_NAME}}/g, 'Author').replace(/{{DATE}}/g, currentDate).replace(/{{READ_TIME}}/g, readTime).replace(/{{LEAD_IMAGE_URL}}/g, leadImageUrl).replace(/{{LEAD_IMAGE_ALT}}/g, article.title).replace(/{{ABOUT_COMPANY_TEXT}}/g, aboutCompanyText).replace(/{{ABOUT_COMPANY_TITLE}}/g, aboutCompanyTitle).replace(/{{SOCIAL_LINKS}}/g, socialLinks).replace(/{{TOC_SECTION}}/g, toc).replace(/{{BODY_CONTENT}}/g, bodyContent).replace(/{{KEY_TAKEAWAYS}}/g, keyTakeaways).replace(/{{REFERENCES}}/g, references);
   // Inject CSS (including custom styles)
   html = injectCSS(html, domain, pairsData, customStyles);
   return html;
@@ -316,10 +303,9 @@ serve(async (req)=>{
     });
   }
   // Parse request body once and store for error handling
-  let task_id: string | null = null;
-  let content_plan_outline_guid: string | null = null;
-  let rich_json: any = null;
-  
+  let task_id = null;
+  let content_plan_outline_guid = null;
+  let rich_json = null;
   try {
     try {
       const requestBody = await req.json();
@@ -339,17 +325,14 @@ serve(async (req)=>{
         }
       });
     }
-    
     const supabaseClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', {
       auth: {
         persistSession: false,
         autoRefreshToken: false
       }
     });
-    
     // Update status: starting HTML conversion
     await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'converting_json_to_html');
-    
     let articleJson;
     let clientDomain = null;
     let heroImageUrl = null;
@@ -376,8 +359,9 @@ serve(async (req)=>{
       } else if (content_plan_outline_guid) {
         query = query.eq('content_plan_outline_guid', content_plan_outline_guid);
       }
-      const { data: taskDataArray, error: taskError } = await query.order('created_at', { ascending: false }).limit(1);
-      
+      const { data: taskDataArray, error: taskError } = await query.order('created_at', {
+        ascending: false
+      }).limit(1);
       if (taskDataArray && taskDataArray.length > 0) {
         const taskData = taskDataArray[0];
         clientDomain = taskData?.client_domain || null;
@@ -391,18 +375,14 @@ serve(async (req)=>{
       } else {
         console.warn(`Warning: No task found for ${task_id ? `task_id: ${task_id}` : `content_plan_outline_guid: ${content_plan_outline_guid}`} (will continue without client_domain/hero_image)`);
       }
-      
       // Update status: fetching JSON
       await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'fetching_json');
-      
       // Call the markdown-to-rich-json function to get the JSON
       const markdownToJsonUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/markdown-to-rich-json`;
-      
       // Add timeout to prevent hanging (5 minutes max)
       const timeoutMs = 5 * 60 * 1000; // 5 minutes
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-      
+      const timeoutId = setTimeout(()=>controller.abort(), timeoutMs);
       try {
         const markdownResponse = await fetch(markdownToJsonUrl, {
           method: 'POST',
@@ -416,15 +396,15 @@ serve(async (req)=>{
           }),
           signal: controller.signal
         });
-        
         clearTimeout(timeoutId);
-        
         if (!markdownResponse.ok) {
           let errorData;
           try {
             errorData = await markdownResponse.json();
-          } catch {
-            errorData = { message: `HTTP ${markdownResponse.status}: ${markdownResponse.statusText}` };
+          } catch  {
+            errorData = {
+              message: `HTTP ${markdownResponse.status}: ${markdownResponse.statusText}`
+            };
           }
           await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'html_generation_failed');
           return new Response(JSON.stringify({
@@ -455,10 +435,8 @@ serve(async (req)=>{
         });
       }
     }
-    
     // Update status: fetching pairs data
     await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'fetching_pairs_data');
-    
     // Fetch pairs data from API if we have a client_domain
     let pairsData = null;
     if (clientDomain) {
@@ -487,10 +465,8 @@ serve(async (req)=>{
       // Continue without pairs data
       }
     }
-    
     // Update status: fetching template
     await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'fetching_template');
-    
     // Fetch the default HTML template (we always need this as base structure)
     console.log('Fetching default template from Supabase Storage');
     const templateUrl = 'https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/cp-downloads/mrb-template.html';
@@ -534,89 +510,64 @@ serve(async (req)=>{
       console.log('Using default template');
       template = defaultTemplate;
     }
-    
     // Update status: rendering HTML
     await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'rendering_html');
-    
     // Render the article
     try {
       const renderedHTML = renderToHTML(articleJson, template, clientDomain || '', pairsData, customStyles, heroImageUrl);
-      
       // Upload HTML to Supabase Storage and get public URL
-      let htmlLink: string | null = null;
-      let guidToUse: string | null = null;
-      
+      let htmlLink = null;
+      let guidToUse = null;
       if (task_id) {
         guidToUse = task_id;
       } else if (content_plan_outline_guid && !rich_json) {
         // Get task_id from content_plan_outline_guid if we don't have task_id
-        const { data: taskDataArray } = await supabaseClient
-          .from('tasks')
-          .select('task_id')
-          .eq('content_plan_outline_guid', content_plan_outline_guid)
-          .order('created_at', { ascending: false })
-          .limit(1);
+        const { data: taskDataArray } = await supabaseClient.from('tasks').select('task_id').eq('content_plan_outline_guid', content_plan_outline_guid).order('created_at', {
+          ascending: false
+        }).limit(1);
         if (taskDataArray && taskDataArray.length > 0 && taskDataArray[0]?.task_id) {
           guidToUse = taskDataArray[0].task_id;
         }
       }
-      
       // Upload to storage if we have a guid and domain
       if (guidToUse && clientDomain) {
         // Update status: uploading to storage
         await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'uploading_html_to_storage');
-        
         try {
           const filePath = `blogs/${clientDomain}/${guidToUse}.html`;
           console.log(`Uploading HTML to storage: ${filePath}`);
-          
-          const { error: uploadError } = await supabaseClient
-            .storage
-            .from('blogs')
-            .upload(filePath, renderedHTML, {
-              contentType: 'text/html',
-              upsert: true // Overwrite if exists
-            });
-          
+          const { error: uploadError } = await supabaseClient.storage.from('blogs').upload(filePath, renderedHTML, {
+            contentType: 'text/html',
+            upsert: true // Overwrite if exists
+          });
           if (uploadError) {
             console.error(`Error uploading HTML to storage:`, uploadError);
           } else {
             // Get public URL
-            const { data: { publicUrl } } = supabaseClient
-              .storage
-              .from('blogs')
-              .getPublicUrl(filePath);
-            
+            const { data: { publicUrl } } = supabaseClient.storage.from('blogs').getPublicUrl(filePath);
             htmlLink = publicUrl;
             console.log(`HTML uploaded successfully. Public URL: ${publicUrl}`);
           }
         } catch (storageError) {
           console.error(`Storage upload error:`, storageError);
-          // Continue without storage URL
+        // Continue without storage URL
         }
       }
-      
       // Prepare update data
-      const updateData: Record<string, any> = {
+      const updateData = {
         post_html: renderedHTML,
         content: renderedHTML // Update content field with HTML
       };
-      
       // Add html_link if we have it
       if (htmlLink) {
         updateData.html_link = htmlLink;
         updateData.supabase_html_url = htmlLink; // Also update supabase_html_url
       }
-      
       // Update status: saving HTML
       await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'saving_html');
-      
       // Save to tasks table if task_id or content_plan_outline_guid was provided
       if (task_id) {
-        const { error: updateError } = await supabaseClient
-          .from('tasks')
-          .update(updateData)
-          .eq('task_id', task_id);
+        const { error: updateError } = await supabaseClient.from('tasks').update(updateData).eq('task_id', task_id);
         if (updateError) {
           console.error('Error saving post_html/content/html_link to tasks:', updateError);
         // Don't fail the request, just log the error
@@ -629,10 +580,7 @@ serve(async (req)=>{
         }
       } else if (content_plan_outline_guid && !rich_json) {
         // Only save if we fetched from database (not if rich_json was passed directly)
-        const { error: updateError } = await supabaseClient
-          .from('tasks')
-          .update(updateData)
-          .eq('content_plan_outline_guid', content_plan_outline_guid);
+        const { error: updateError } = await supabaseClient.from('tasks').update(updateData).eq('content_plan_outline_guid', content_plan_outline_guid);
         if (updateError) {
           console.error('Error saving post_html/content/html_link to tasks:', updateError);
         } else {
@@ -643,10 +591,8 @@ serve(async (req)=>{
           }
         }
       }
-      
       // Update status: HTML generation complete
       await updateTaskStatus(supabaseClient, task_id, content_plan_outline_guid, 'Completed');
-      
       return new Response(renderedHTML, {
         headers: {
           ...corsHeaders,
