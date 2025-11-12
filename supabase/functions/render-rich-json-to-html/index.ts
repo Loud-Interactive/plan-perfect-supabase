@@ -198,6 +198,40 @@ function convertReferencesToLinks(content) {
   return `${minutes} min read`;
 }
 /**
+ * Validate that a custom template contains required placeholders
+ */
+function validateCustomTemplate(template) {
+  // Critical placeholders - template will fail without these
+  const criticalPlaceholders = [
+    '{{TITLE_TAG}}',         // Required for <title> in head
+    '{{META_DESCRIPTION}}',  // Required for SEO meta tag
+    '{{BODY_CONTENT}}'       // Required for main article content
+  ];
+
+  // Recommended placeholders - template will work but may look incomplete
+  const recommendedPlaceholders = [
+    '{{JSON_LD}}',           // Structured data for SEO
+    '{{TOC_SECTION}}',       // Table of contents
+    '{{SUMMARY_SECTION}}',   // Article summary
+    '{{KEY_TAKEAWAYS}}',     // Key points section
+    '{{REFERENCES}}'         // Citations/references section
+  ];
+
+  const missingCritical = criticalPlaceholders.filter(placeholder =>
+    !template.includes(placeholder)
+  );
+
+  const missingRecommended = recommendedPlaceholders.filter(placeholder =>
+    !template.includes(placeholder)
+  );
+
+  return {
+    isValid: missingCritical.length === 0,
+    missingCritical,
+    missingRecommended
+  };
+}
+/**
  * Inject CSS links and custom styles into template head
  */ function injectCSS(template, domain, pairsData, customStyles = '') {
   const baseUrl = 'https://jsypctdhynsdqrfifvdh.supabase.co/storage/v1/object/public/cp-blog-css';
@@ -497,19 +531,38 @@ serve(async (req)=>{
     let customStyles = '';
     if (pairsData?.HTML_Post_Template) {
       console.log(`Found custom HTML_Post_Template for ${clientDomain}`);
+
       // Extract any <style> tags from custom template (head or body)
       const styleMatches = pairsData.HTML_Post_Template.match(/<style[^>]*>[\s\S]*?<\/style>/gi);
       if (styleMatches) {
         customStyles = styleMatches.join('\n');
         console.log(`  - Found ${styleMatches.length} custom <style> block(s)`);
       }
-      // IMPORTANT: Always use default template structure for content rendering
-      // Custom templates are used ONLY for CSS/styling, not content structure
-      // This ensures renderToHTML always works with predictable placeholders
-      console.log(`  - Using default template structure with custom CSS`);
-      template = defaultTemplate;
+
+      // Validate that the custom template has required placeholders
+      const validation = validateCustomTemplate(pairsData.HTML_Post_Template);
+
+      if (validation.isValid) {
+        console.log(`  - Custom template validation passed - using custom template`);
+        template = pairsData.HTML_Post_Template;
+
+        // Log any missing recommended placeholders as warnings
+        if (validation.missingRecommended.length > 0) {
+          console.log(`  - Warning: Custom template missing recommended placeholders:`);
+          validation.missingRecommended.forEach(placeholder => {
+            console.log(`    * ${placeholder}`);
+          });
+        }
+      } else {
+        console.log(`  - Custom template validation failed - missing required placeholders:`);
+        validation.missingCritical.forEach(placeholder => {
+          console.log(`    * ${placeholder}`);
+        });
+        console.log(`  - Falling back to default template with custom CSS`);
+        template = defaultTemplate;
+      }
     } else {
-      console.log('Using default template');
+      console.log('No custom template found - using default template');
       template = defaultTemplate;
     }
     // Update status: rendering HTML
